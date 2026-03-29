@@ -1,0 +1,12 @@
+#[path = "parser.rs"]
+pub mod parser;
+#[path = "reader.rs"]
+pub mod reader;
+#[path = "records.rs"]
+pub mod records;
+#[path = "source.rs"]
+pub mod source;
+#[path = "stream/mod.rs"]
+pub mod stream;
+#[path = "writer.rs"]
+pub mod writer;

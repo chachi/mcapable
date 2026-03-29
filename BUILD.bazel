@@ -1,0 +1,18 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["Cargo.toml", "Cargo.lock"])
+
+filegroup(
+    name = "all_crates",
+    srcs = [
+        "//crates/mcapable:mcapable",
+        "//crates/mcapable-core:core",
+        "//crates/mcapable-opendal:opendal",
+        "//crates/mcapable-cli:mcapable",
+        "//crates/mcapable-ffi:ffi",
+        "//crates/mcapable-cpp:cpp",
+        "//crates/mcapable-py:py",
+        "//crates/mcapable-wasm:wasm",
+        "//crates/mcapable-swift:swift",
+    ],
+)

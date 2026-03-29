@@ -1,0 +1,71 @@
+load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script", "cargo_toml_env_vars")
+load("@rules_rust//rust:defs.bzl", "rust_static_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_static_library(
+    name = "cpp",
+    crate_name = "mcapable_cpp",
+    crate_root = "src/lib.rs",
+    srcs = glob(["src/**/*.rs", "src/*.rs"]),
+    edition = "2024",
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+    ) + [
+        ":build_script_build",
+        "//crates/mcapable-core:core",
+    ],
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+    ),
+)
+
+cargo_toml_env_vars(
+    name = "cargo_toml_env_vars",
+    src = "Cargo.toml",
+)
+
+cargo_build_script(
+    name = "_bs",
+    crate_name = "build_script_build",
+    crate_root = "build.rs",
+    data = glob(
+        allow_empty = True,
+        include = ["**"],
+        exclude = [
+            "**/* *",
+            ".tmp_git_root/**/*",
+            "BUILD",
+            "BUILD.bazel",
+            "WORKSPACE",
+            "WORKSPACE.bazel",
+        ],
+    ),
+    build_script_env = {
+        "MCAPABLE_BAZEL": "1",
+    },
+    deps = [
+        "@crate_index//:cxx-build",
+    ],
+    link_deps = [
+        "@crate_index//:cxx",
+    ],
+    edition = "2024",
+    pkg_name = "mcapable-cpp",
+    rustc_env_files = [
+        ":cargo_toml_env_vars",
+    ],
+    srcs = glob(
+        allow_empty = True,
+        include = ["**/*.rs"],
+    ),
+    visibility = ["//visibility:private"],
+)
+
+alias(
+    name = "build_script_build",
+    actual = ":_bs",
+    tags = ["manual"],
+)

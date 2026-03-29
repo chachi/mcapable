@@ -1,0 +1,28 @@
+load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_shared_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_shared_library(
+    name = "py",
+    crate_name = "mcapable",
+    crate_root = "src/lib.rs",
+    srcs = glob(["src/**/*.rs", "src/*.rs"]),
+    edition = "2024",
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+    ) + [
+        "//crates/mcapable-core:core",
+    ],
+    rustc_flags = select({
+        "@platforms//os:macos": [
+            "-C",
+            "link-arg=-Wl,-undefined,dynamic_lookup",
+        ],
+        "//conditions:default": [],
+    }),
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+    ),
+)

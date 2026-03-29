@@ -1,0 +1,40 @@
+module(
+    name = "mcapable",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_rust", version = "0.68.1")
+bazel_dep(name = "platforms", version = "1.0.0")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2024",
+    versions = ["1.89.0"],
+)
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+
+rust_host_tools = use_extension("@rules_rust//rust:extensions.bzl", "rust_host_tools")
+rust_host_tools.host_tools(
+    name = "rust_host_tools_mcapable",
+    version = "1.89.0",
+)
+use_repo(rust_host_tools, "rust_host_tools_mcapable")
+
+crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
+crate.from_cargo(
+    name = "crate_index",
+    cargo_lockfile = "//:Cargo.lock",
+    host_tools = "@rust_host_tools_mcapable",
+    manifests = [
+        "//:Cargo.toml",
+        "//crates/mcapable-cli:Cargo.toml",
+        "//crates/mcapable-core:Cargo.toml",
+        "//crates/mcapable-cpp:Cargo.toml",
+        "//crates/mcapable-ffi:Cargo.toml",
+        "//crates/mcapable-opendal:Cargo.toml",
+        "//crates/mcapable-py:Cargo.toml",
+        "//crates/mcapable-wasm:Cargo.toml",
+    ],
+)
+use_repo(crate, "crate_index")

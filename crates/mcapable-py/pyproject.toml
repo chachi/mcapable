@@ -1,0 +1,19 @@
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "mcapable"
+description = "Python bindings for the mcapable MCAP reader/writer"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Rust",
+  "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+
+[tool.maturin]
+module-name = "mcapable"
+bindings = "pyo3"

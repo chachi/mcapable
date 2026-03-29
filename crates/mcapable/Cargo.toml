@@ -1,0 +1,70 @@
+[package]
+name = "mcapable"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Re-export mcapable-core as a convenience
+mcapable-core = { path = "../mcapable-core" }
+
+[dev-dependencies]
+proptest = "1.9"
+tempfile = "3.23"     # For temporary MCAP files in tests
+criterion = { version = "0.5", features = ["html_reports"] }
+mcap = "0.24"         # For comparison benchmarks
+bytes = "1.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+strum = { version = "0.26", features = ["derive"] }
+memmap = "0.7"
+base64 = "0.22"
+
+# Internal benchmarks
+[[bench]]
+name = "reader_benchmark"
+harness = false
+
+# Comparison benchmarks with official mcap crate
+[[bench]]
+name = "vs_mcap"
+harness = false
+
+[[bench]]
+name = "writer_vs_mcap"
+harness = false
+
+[[example]]
+name = "basic"
+path = "../../examples/rust/basic.rs"
+
+[[example]]
+name = "bytes_source"
+path = "../../examples/rust/bytes_source.rs"
+
+[[example]]
+name = "channel_filter"
+path = "../../examples/rust/channel_filter.rs"
+
+[[example]]
+name = "chunks"
+path = "../../examples/rust/chunks.rs"
+
+[[example]]
+name = "filtering"
+path = "../../examples/rust/filtering.rs"
+
+[[example]]
+name = "metadata"
+path = "../../examples/rust/metadata.rs"
+
+[[example]]
+name = "multiple_streams"
+path = "../../examples/rust/multiple_streams.rs"
+
+[[example]]
+name = "parsed_messages"
+path = "../../examples/rust/parsed_messages.rs"
+
+[[example]]
+name = "records"
+path = "../../examples/rust/records.rs"

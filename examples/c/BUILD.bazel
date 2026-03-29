@@ -1,0 +1,13 @@
+load("//bazel:defs.bzl", "c_example")
+
+package(default_visibility = ["//visibility:public"])
+
+c_example(name = "basic", src = "basic.c")
+c_example(name = "bytes_source", src = "bytes_source.c")
+c_example(name = "channel_filter", src = "channel_filter.c")
+c_example(name = "chunks", src = "chunks.c")
+c_example(name = "filtering", src = "filtering.c")
+c_example(name = "metadata", src = "metadata.c")
+c_example(name = "multiple_streams", src = "multiple_streams.c")
+c_example(name = "parsed_messages", src = "parsed_messages.c")
+c_example(name = "records", src = "records.c")

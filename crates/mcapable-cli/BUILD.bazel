@@ -1,0 +1,31 @@
+load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_binary(
+    name = "mcapable",
+    crate_name = "mcapable",
+    crate_root = "src/main.rs",
+    srcs = ["src/main.rs"],
+    edition = "2021",
+    deps = [":cli_lib"],
+)
+
+rust_library(
+    name = "cli_lib",
+    crate_name = "mcapable_cli",
+    crate_root = "src/lib.rs",
+    srcs = glob(["src/**/*.rs", "src/*.rs"]),
+    edition = "2021",
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+    ) + [
+        "//crates/mcapable-core:core",
+        "//crates/mcapable-opendal:opendal",
+    ],
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+    ),
+)

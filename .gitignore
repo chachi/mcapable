@@ -1,0 +1,11 @@
+/target
+*.rs~
+*.swp
+*.swo
+.DS_Store
+*~
+*.mcap
+bazel-*
+__pycache__
+node_modules
+crates/mcapable-swift/Generated/

@@ -1,0 +1,12 @@
+{
+  "name": "@mcapable/wasm",
+  "version": "0.1.0",
+  "description": "WASM bindings for mcapable",
+  "private": true,
+  "scripts": {
+    "build": "wasm-pack build --target nodejs --out-dir pkg",
+    "build:web": "wasm-pack build --target web --out-dir pkg-web",
+    "test:node": "node --test tests/node/*.cjs",
+    "test": "npm run build && npm run test:node"
+  }
+}

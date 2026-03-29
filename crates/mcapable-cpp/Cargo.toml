@@ -1,0 +1,16 @@
+[package]
+name = "mcapable-cpp"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+cxx = "1.0"
+mcapable-core = { path = "../mcapable-core", features = ["parsers"] }
+serde_json = "1.0"
+bytes = "1.11"
+
+[build-dependencies]
+cxx-build = "1.0"

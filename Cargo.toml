@@ -1,0 +1,24 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/mcapable",
+    "crates/mcapable-core",
+    "crates/mcapable-opendal",
+    "crates/mcapable-cli",
+    "crates/mcapable-py",
+    "crates/mcapable-cpp",
+    "crates/mcapable-wasm",
+    "crates/mcapable-ffi",
+    "crates/mcapable-swift",
+]
+
+[profile.bench]
+opt-level = 3
+debug = true
+lto = true
+
+[profile.profiling]
+inherits = "release"
+opt-level = 3
+debug = true
+lto = true

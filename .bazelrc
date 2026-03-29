@@ -1,0 +1,2 @@
+build --@rules_rust//cargo/settings:cargo_manifest_dir_filename_suffixes_to_retain=.h
+build --@rules_rust//cargo/settings:incompatible_runfiles_cargo_manifest_dir=false
