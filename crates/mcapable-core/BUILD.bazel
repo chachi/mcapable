@@ -8,7 +8,7 @@ rust_library(
     crate_name = "mcapable_core",
     crate_root = "src/lib.rs",
     srcs = glob(["src/**/*.rs", "src/*.rs"]),
-    crate_features = ["std", "compression", "lz4", "zstd"],
+    crate_features = ["std", "compression", "lz4", "zstd", "parsers"],
     edition = "2024",
     aliases = aliases(),
     deps = all_crate_deps(
