@@ -193,16 +193,16 @@ metrics:
     @echo "=== Code Metrics ==="
     @echo ""
     @echo "Lines of code:"
-    @find src -name "*.rs" -exec wc -l {} + | tail -1
+    @find crates -name "*.rs" -exec wc -l {} + | tail -1
     @echo ""
     @echo "Number of files:"
-    @find src -name "*.rs" | wc -l
+    @find crates -name "*.rs" | wc -l
     @echo ""
     @echo "TODO markers:"
-    @grep -r "TODO\|FIXME\|XXX\|HACK" src --include="*.rs" || echo "None found"
+    @grep -r "TODO\|FIXME\|XXX\|HACK" crates --include="*.rs" || echo "None found"
     @echo ""
     @echo "Public API items:"
-    @grep -r "^pub " src --include="*.rs" | wc -l
+    @grep -r "^pub " crates --include="*.rs" | wc -l
 
 # Run all quality checks (for CI)
 ci: fmt-check clippy test coverage-lcov metrics
