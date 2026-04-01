@@ -1,5 +1,5 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -19,3 +19,59 @@ rust_library(
         proc_macro = True,
     ),
 )
+
+# Integration tests with helpers (conformance suite uses mod helpers + mod conformance)
+_TESTS_WITH_HELPERS = [
+    "conformance_tests",
+    "channel_predicate_variants",
+    "zero_copy_bytes_source",
+]
+
+[rust_test(
+    name = test_name,
+    crate_root = "tests/{}.rs".format(test_name),
+    srcs = ["tests/{}.rs".format(test_name)] + glob([
+        "tests/helpers/**/*.rs",
+        "tests/conformance/**/*.rs",
+    ]),
+    edition = "2024",
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ) + [
+        ":mcapable",
+        "//crates/mcapable-core:core",
+    ],
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+        proc_macro_dev = True,
+    ),
+) for test_name in _TESTS_WITH_HELPERS]
+
+# Standalone integration tests (no helpers needed)
+_STANDALONE_TESTS = [
+    "arena_bytes_source",
+    "channel_predicate_filter",
+    "comparison_tests",
+    "roundtrip_equivalence",
+]
+
+[rust_test(
+    name = test_name,
+    crate_root = "tests/{}.rs".format(test_name),
+    srcs = ["tests/{}.rs".format(test_name)],
+    edition = "2024",
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ) + [
+        ":mcapable",
+        "//crates/mcapable-core:core",
+    ],
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+        proc_macro_dev = True,
+    ),
+) for test_name in _STANDALONE_TESTS]
