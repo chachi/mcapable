@@ -1,5 +1,5 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
-load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -27,5 +27,23 @@ rust_library(
     ],
     proc_macro_deps = all_crate_deps(
         proc_macro = True,
+    ),
+)
+
+# Unit tests (inline #[cfg(test)] modules in src/)
+rust_test(
+    name = "cli_unit_test",
+    crate = ":cli_lib",
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ) + [
+        "//crates/mcapable-core:core",
+        "//crates/mcapable-opendal:opendal",
+    ],
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+        proc_macro_dev = True,
     ),
 )

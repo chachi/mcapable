@@ -1,5 +1,5 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -8,7 +8,7 @@ rust_library(
     crate_name = "mcapable_core",
     crate_root = "src/lib.rs",
     srcs = glob(["src/**/*.rs", "src/*.rs"]),
-    crate_features = ["std", "compression", "lz4", "zstd"],
+    crate_features = ["std", "alloc", "compression", "lz4", "zstd", "parsers"],
     edition = "2024",
     aliases = aliases(),
     deps = all_crate_deps(
@@ -18,3 +18,45 @@ rust_library(
         proc_macro = True,
     ),
 )
+
+# Unit tests (inline #[cfg(test)] modules in src/)
+rust_test(
+    name = "core_unit_test",
+    crate = ":core",
+    crate_features = ["std", "alloc", "compression", "lz4", "zstd", "parsers"],
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ),
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+        proc_macro_dev = True,
+    ),
+)
+
+# Integration tests
+_TESTS = [
+    "writer_roundtrip",
+    "writer_properties",
+    "rolling_writer",
+    "rolling_writer_properties",
+]
+
+[rust_test(
+    name = test_name,
+    crate_root = "tests/{}.rs".format(test_name),
+    srcs = ["tests/{}.rs".format(test_name)],
+    edition = "2024",
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ) + [
+        ":core",
+    ],
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+        proc_macro_dev = True,
+    ),
+) for test_name in _TESTS]

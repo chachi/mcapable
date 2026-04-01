@@ -8,13 +8,13 @@ def c_example(name, src):
             "//crates/mcapable-ffi:ffi",
         ],
         outs = [name],
-        cmd = "LIB=$(location //crates/mcapable-ffi:ffi) && " +
+        cmd = ("LIB=$(location //crates/mcapable-ffi:ffi) && " +
               "LIBDIR=$$(dirname $$LIB) && " +
               "cc $(location {src}) " +
-              "-I$(dirname $(location :mcapable_ffi.h)) " +
+              "-I$$(dirname $(location :mcapable_ffi.h)) " +
               "$$LIB " +
               "-Wl,-rpath,$$LIBDIR " +
-              "-o $@".format(src = src),
+              "-o $@").format(src = src),
         local = True,
         tags = ["local"],
     )

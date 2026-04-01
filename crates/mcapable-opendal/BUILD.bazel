@@ -1,5 +1,5 @@
 load("@crate_index//:defs.bzl", "aliases", "all_crate_deps")
-load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -18,4 +18,43 @@ rust_library(
     proc_macro_deps = all_crate_deps(
         proc_macro = True,
     ),
+)
+
+rust_test(
+    name = "bytes_source",
+    crate_root = "tests/bytes_source.rs",
+    srcs = ["tests/bytes_source.rs"],
+    edition = "2024",
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ) + [
+        ":opendal",
+        "//crates/mcapable-core:core",
+    ],
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+        proc_macro_dev = True,
+    ),
+)
+
+rust_test(
+    name = "minio",
+    crate_root = "tests/minio.rs",
+    srcs = ["tests/minio.rs"],
+    edition = "2024",
+    aliases = aliases(),
+    deps = all_crate_deps(
+        normal = True,
+        normal_dev = True,
+    ) + [
+        ":opendal",
+        "//crates/mcapable-core:core",
+    ],
+    proc_macro_deps = all_crate_deps(
+        proc_macro = True,
+        proc_macro_dev = True,
+    ),
+    tags = ["manual"],  # Requires Docker/MinIO
 )
