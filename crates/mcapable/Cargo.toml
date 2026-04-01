@@ -68,3 +68,15 @@ path = "../../examples/rust/parsed_messages.rs"
 [[example]]
 name = "records"
 path = "../../examples/rust/records.rs"
+
+[[example]]
+name = "write_basic"
+path = "../../examples/rust/write_basic.rs"
+
+[[example]]
+name = "write_chunked"
+path = "../../examples/rust/write_chunked.rs"
+
+[[example]]
+name = "write_metadata"
+path = "../../examples/rust/write_metadata.rs"
