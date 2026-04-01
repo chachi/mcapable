@@ -24,6 +24,9 @@ mod io;
 #[path = "writer/types.rs"]
 mod types;
 
+#[path = "writer/rolling/mod.rs"]
+pub mod rolling;
+
 pub use api::{
     AttachmentWriter, ChannelSpec, ChannelWriter, ChunkOptions, IntoPayloadBytes, SchemaSpec,
     Validation, Writer,

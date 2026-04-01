@@ -80,3 +80,15 @@ path = "../../examples/rust/write_chunked.rs"
 [[example]]
 name = "write_metadata"
 path = "../../examples/rust/write_metadata.rs"
+
+[[example]]
+name = "rolling_basic"
+path = "../../examples/rust/rolling_basic.rs"
+
+[[example]]
+name = "rolling_triggers"
+path = "../../examples/rust/rolling_triggers.rs"
+
+[[example]]
+name = "rolling_custom"
+path = "../../examples/rust/rolling_custom.rs"

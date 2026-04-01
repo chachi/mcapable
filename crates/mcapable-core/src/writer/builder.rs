@@ -86,24 +86,31 @@ impl WriterBuilder {
     /// The sink must support seeking to allow writing a footer and (later) summary sections.
     pub fn build<W: Write + Seek>(self, sink: W) -> Result<Writer<W>> {
         Ok(Writer {
-            inner: Rc::new(RefCell::new(WriterImpl {
-                sink: PositionTrackingSink::new(sink)?,
-                header: self.header,
-                wrote_header: false,
-                finished: false,
-                next_schema_id: 1,
-                next_channel_id: 1,
-                validation: self.validation,
-                always_write_summary: self.always_write_summary,
-                chunk_state: self.chunk_options.map(ChunkState::new),
-                schemas: HashMap::new(),
-                channels: HashMap::new(),
-                channel_stats: Vec::new(),
-                chunk_indexes: Vec::new(),
-                attachment_indexes: Vec::new(),
-                metadata_indexes: Vec::new(),
-                schema_ids_by_key: HashMap::new(),
-            })),
+            inner: Rc::new(RefCell::new(self.build_impl(sink)?)),
+        })
+    }
+
+    /// Build just the internal writer implementation (no Rc/RefCell wrapping).
+    ///
+    /// Used by the rolling writer to manage `WriterImpl` lifecycle directly.
+    pub(crate) fn build_impl<W: Write + Seek>(self, sink: W) -> Result<WriterImpl<W>> {
+        Ok(WriterImpl {
+            sink: PositionTrackingSink::new(sink)?,
+            header: self.header,
+            wrote_header: false,
+            finished: false,
+            next_schema_id: 1,
+            next_channel_id: 1,
+            validation: self.validation,
+            always_write_summary: self.always_write_summary,
+            chunk_state: self.chunk_options.map(ChunkState::new),
+            schemas: HashMap::new(),
+            channels: HashMap::new(),
+            channel_stats: Vec::new(),
+            chunk_indexes: Vec::new(),
+            attachment_indexes: Vec::new(),
+            metadata_indexes: Vec::new(),
+            schema_ids_by_key: HashMap::new(),
         })
     }
 }
