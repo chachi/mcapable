@@ -85,14 +85,17 @@ fn writer_mode_strategy() -> impl Strategy<Value = WriterBuilder> {
         Just(WriterBuilder::new().profile("test").chunked(ChunkOptions {
             compression: None,
             max_uncompressed_bytes: 128,
+            include_crc: true,
         })),
         Just(WriterBuilder::new().profile("test").chunked(ChunkOptions {
             compression: Some(Compression::Lz4),
             max_uncompressed_bytes: 128,
+            include_crc: true,
         })),
         Just(WriterBuilder::new().profile("test").chunked(ChunkOptions {
             compression: Some(Compression::Zstd),
             max_uncompressed_bytes: 128,
+            include_crc: true,
         })),
     ]
 }

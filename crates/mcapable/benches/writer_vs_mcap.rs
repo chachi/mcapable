@@ -156,6 +156,7 @@ fn bench_writer_to_mem(c: &mut Criterion) {
                 mcapable::WriterBuilder::new().chunked(mcapable::ChunkOptions {
                     compression: to_mcapable_compression(spec.compression),
                     max_uncompressed_bytes: spec.chunk_size.unwrap_or(4 * 1024 * 1024),
+                    ..mcapable::ChunkOptions::default()
                 })
             } else {
                 mcapable::WriterBuilder::new()
@@ -446,6 +447,7 @@ fn bench_writer_disk_roundtrip(c: &mut Criterion) {
                 mcapable::WriterBuilder::new().chunked(mcapable::ChunkOptions {
                     compression: to_mcapable_compression(spec.compression),
                     max_uncompressed_bytes: spec.chunk_size.unwrap_or(4 * 1024 * 1024),
+                    ..mcapable::ChunkOptions::default()
                 })
             } else {
                 mcapable::WriterBuilder::new()
@@ -719,6 +721,7 @@ fn bench_writer_disk_write_only(c: &mut Criterion) {
                 mcapable::WriterBuilder::new().chunked(mcapable::ChunkOptions {
                     compression: to_mcapable_compression(spec.compression),
                     max_uncompressed_bytes: spec.chunk_size.unwrap_or(4 * 1024 * 1024),
+                    ..mcapable::ChunkOptions::default()
                 })
             } else {
                 mcapable::WriterBuilder::new()

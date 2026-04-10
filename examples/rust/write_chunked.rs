@@ -20,6 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .chunked(ChunkOptions {
             compression: Some(Compression::Zstd),
             max_uncompressed_bytes: 1024 * 64, // Flush chunk every 64 KB
+            ..ChunkOptions::default()
         })
         .build(file)?;
 
