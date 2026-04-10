@@ -57,6 +57,9 @@ pub mod zero_copy;
 #[cfg(feature = "std")]
 pub use compression::decompress;
 pub use compression::{Compression, calculate_crc, parse_compression, verify_crc};
+
+/// The version of the mcapable-core library.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub use error::{Error, ParseError, Result};
 #[cfg(feature = "std")]
 pub(crate) use std::{parser, records};

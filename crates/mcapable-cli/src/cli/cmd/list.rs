@@ -3,32 +3,29 @@ use std::collections::HashMap;
 use std::io::Write;
 
 use super::table::{render_table, TableData};
-use super::{open_reader, ListCommand};
+use super::{open_reader, CliResult, ListCommand};
 
-pub(crate) fn dispatch(command: ListCommand) -> Result<(), String> {
+pub fn dispatch(command: ListCommand) -> Result<(), String> {
     run(command)
 }
 
-pub(crate) fn run(command: ListCommand) -> Result<(), String> {
+pub fn run(command: ListCommand) -> Result<(), String> {
     let mut stdout = std::io::stdout().lock();
     run_with_output(command, &mut stdout)
 }
 
-pub(crate) fn run_with_output<W: Write>(
-    command: ListCommand,
-    stdout: &mut W,
-) -> Result<(), String> {
+pub fn run_with_output<W: Write>(command: ListCommand, stdout: &mut W) -> Result<(), String> {
     match command {
         ListCommand::Schemas { input } => {
             let mut reader = open_reader(input.unwrap_or_else(|| "-".to_string()))?;
             let summary_schemas = reader
                 .summary()
-                .map_err(|e| e.to_string())?
+                .cli()?
                 .map(|summary| summary.schemas.clone())
                 .unwrap_or_default();
             let schemas = if summary_schemas.is_empty() {
                 let mut out = HashMap::new();
-                for schema in reader.data_section_schemas().map_err(|e| e.to_string())? {
+                for schema in reader.data_section_schemas().cli()? {
                     out.insert(schema.id, schema);
                 }
                 Cow::Owned(out)
@@ -36,18 +33,18 @@ pub(crate) fn run_with_output<W: Write>(
                 Cow::Borrowed(summary_schemas.as_ref())
             };
             let table = build_schema_table(schemas.as_ref());
-            writeln!(stdout, "{}", render_table(&table)).map_err(|e| e.to_string())?;
+            writeln!(stdout, "{}", render_table(&table)).cli()?;
         }
         ListCommand::Channels { input } => {
             let mut reader = open_reader(input.unwrap_or_else(|| "-".to_string()))?;
             let summary_channels = reader
                 .summary()
-                .map_err(|e| e.to_string())?
+                .cli()?
                 .map(|summary| summary.channels.clone())
                 .unwrap_or_default();
             let channels = if summary_channels.is_empty() {
                 let mut out = HashMap::new();
-                for channel in reader.data_section_channels().map_err(|e| e.to_string())? {
+                for channel in reader.data_section_channels().cli()? {
                     out.insert(channel.id, channel);
                 }
                 Cow::Owned(out)
@@ -55,12 +52,12 @@ pub(crate) fn run_with_output<W: Write>(
                 Cow::Borrowed(summary_channels.as_ref())
             };
             let table = build_channel_table(channels.as_ref());
-            writeln!(stdout, "{}", render_table(&table)).map_err(|e| e.to_string())?;
+            writeln!(stdout, "{}", render_table(&table)).cli()?;
         }
         ListCommand::Metadata { input } => {
             let input_value = input.unwrap_or_else(|| "-".to_string());
             let mut reader = open_reader(input_value)?;
-            let entries = reader.metadata_entries().map_err(|e| e.to_string())?;
+            let entries = reader.metadata_entries().cli()?;
             let rows = entries.into_iter().map(|entry| {
                 let metadata_str = format_metadata_map(&entry.metadata.metadata);
                 (
@@ -71,12 +68,12 @@ pub(crate) fn run_with_output<W: Write>(
                 )
             });
             let table = build_metadata_table(rows);
-            writeln!(stdout, "{}", render_table(&table)).map_err(|e| e.to_string())?;
+            writeln!(stdout, "{}", render_table(&table)).cli()?;
         }
         ListCommand::Attachments { input } => {
             let input_value = input.unwrap_or_else(|| "-".to_string());
             let mut reader = open_reader(input_value)?;
-            let entries = reader.attachment_entries().map_err(|e| e.to_string())?;
+            let entries = reader.attachment_entries().cli()?;
             let rows = entries.into_iter().map(|entry| {
                 (
                     entry.name.as_str().to_string(),
@@ -88,13 +85,13 @@ pub(crate) fn run_with_output<W: Write>(
                 )
             });
             let table = build_attachment_table(rows);
-            writeln!(stdout, "{}", render_table(&table)).map_err(|e| e.to_string())?;
+            writeln!(stdout, "{}", render_table(&table)).cli()?;
         }
         ListCommand::Chunks { input } => {
             let input_value = input.unwrap_or_else(|| "-".to_string());
             let mut reader = open_reader(input_value)?;
-            let indexes = reader.chunk_indexes().map_err(|e| e.to_string())?;
-            let footer = reader.footer().map_err(|e| e.to_string())?;
+            let indexes = reader.chunk_indexes().cli()?;
+            let footer = reader.footer().cli()?;
             let summary_present = footer
                 .as_ref()
                 .map(|footer| footer.summary_start != 0)
@@ -102,7 +99,7 @@ pub(crate) fn run_with_output<W: Write>(
             let mut rows = Vec::new();
             if !indexes.is_empty() {
                 for idx in indexes.iter() {
-                    let compressed_size = idx.compressed_size().map_err(|e| e.to_string())?;
+                    let compressed_size = idx.compressed_size().cli()?;
                     let ratio = if idx.uncompressed_size == 0 {
                         0.0f32
                     } else {
@@ -124,7 +121,7 @@ pub(crate) fn run_with_output<W: Write>(
                 return Ok(());
             } else {
                 for chunk in reader.chunks() {
-                    let chunk = chunk.map_err(|e| e.to_string())?;
+                    let chunk = chunk.cli()?;
                     let ratio = if chunk.uncompressed_size == 0 {
                         0.0f32
                     } else {
@@ -144,7 +141,7 @@ pub(crate) fn run_with_output<W: Write>(
                 }
             }
             let table = build_chunk_table(rows);
-            writeln!(stdout, "{}", render_table(&table)).map_err(|e| e.to_string())?;
+            writeln!(stdout, "{}", render_table(&table)).cli()?;
         }
     }
 

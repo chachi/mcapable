@@ -1,4 +1,4 @@
-pub(crate) fn run(
+pub fn run(
     _output: String,
     _count: usize,
     _compression: Option<String>,

@@ -1,51 +1,50 @@
+use std::collections::HashMap;
 use std::io::Write;
 
-use super::{open_reader, parse_topics, preload_schemas_and_channels};
+use super::{open_reader, parse_topics, preload_schemas_and_channels, resolve_time, CliResult};
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run(
+pub fn run(
     input: Option<String>,
     topics: Vec<String>,
-    start: Option<u64>,
-    end: Option<u64>,
+    start: Option<String>,
+    end: Option<String>,
     start_secs: Option<u64>,
     start_nsecs: Option<u32>,
     end_secs: Option<u64>,
     end_nsecs: Option<u32>,
+    json: bool,
 ) -> Result<(), String> {
-    // Handle start time
-    let start_time = if start.is_some() {
-        start
-    } else if let Some(secs) = start_secs {
-        let nsecs = start_nsecs.unwrap_or(0);
-        if nsecs >= 1_000_000_000 {
-            return Err("start_nsecs must be < 1_000_000_000".to_string());
-        }
-        Some(
-            secs.checked_mul(1_000_000_000)
-                .and_then(|v| v.checked_add(nsecs as u64))
-                .ok_or_else(|| "start timestamp overflow".to_string())?,
-        )
-    } else {
-        None
-    };
+    let mut stdout = std::io::stdout().lock();
+    run_with_output(
+        input,
+        topics,
+        start,
+        end,
+        start_secs,
+        start_nsecs,
+        end_secs,
+        end_nsecs,
+        json,
+        &mut stdout,
+    )
+}
 
-    // Handle end time
-    let end_time = if end.is_some() {
-        end
-    } else if let Some(secs) = end_secs {
-        let nsecs = end_nsecs.unwrap_or(0);
-        if nsecs >= 1_000_000_000 {
-            return Err("end_nsecs must be < 1_000_000_000".to_string());
-        }
-        Some(
-            secs.checked_mul(1_000_000_000)
-                .and_then(|v| v.checked_add(nsecs as u64))
-                .ok_or_else(|| "end timestamp overflow".to_string())?,
-        )
-    } else {
-        None
-    };
+#[allow(clippy::too_many_arguments)]
+pub fn run_with_output<W: Write>(
+    input: Option<String>,
+    topics: Vec<String>,
+    start: Option<String>,
+    end: Option<String>,
+    start_secs: Option<u64>,
+    start_nsecs: Option<u32>,
+    end_secs: Option<u64>,
+    end_nsecs: Option<u32>,
+    json: bool,
+    out: &mut W,
+) -> Result<(), String> {
+    let start_time = resolve_time(start, start_secs, start_nsecs)?;
+    let end_time = resolve_time(end, end_secs, end_nsecs)?;
 
     let topics_str = if topics.is_empty() {
         None
@@ -58,8 +57,27 @@ pub(crate) fn run(
     let mut reader = open_reader(file)?;
     preload_schemas_and_channels(&mut reader)?;
     let channels = reader.channels();
+    let schemas = reader.schemas();
 
-    let mut stream = reader.messages().map_err(|e| e.to_string())?;
+    // Build per-schema parsers for JSON mode
+    let schema_parsers: HashMap<u16, mcapable_core::stream::schema_parser::SchemaParser> = if json {
+        let mut parsers = HashMap::new();
+        for (id, schema) in schemas.iter() {
+            match mcapable_core::stream::schema_parser::SchemaParser::from_schema(schema) {
+                Ok(parser) => {
+                    parsers.insert(*id, parser);
+                }
+                Err(e) => {
+                    eprintln!("warning: cannot create parser for schema {id}: {e}");
+                }
+            }
+        }
+        parsers
+    } else {
+        HashMap::new()
+    };
+
+    let mut stream = reader.messages().cli()?;
     if let Some(start) = start_time {
         stream = stream.filter(move |hdr| hdr.log_time >= start);
     }
@@ -70,19 +88,77 @@ pub(crate) fn run(
         stream = stream.filter_channel(|ch| topic_filter.contains(ch.topic.as_str()));
     }
 
-    let mut stdout = std::io::stdout().lock();
     for msg in stream {
-        let msg = msg.map_err(|e| e.to_string())?;
-        let topic = channels
-            .get(&msg.channel_id)
-            .map(|c| c.topic.as_str())
-            .unwrap_or("<unknown>");
-        println!(
-            "{} {} {} {} {}",
-            topic, msg.channel_id, msg.sequence, msg.log_time, msg.publish_time
-        );
-        stdout.write_all(msg.data()).map_err(|e| e.to_string())?;
+        let msg = msg.cli()?;
+        let channel = channels.get(&msg.channel_id);
+        let topic = channel.map(|c| c.topic.as_str()).unwrap_or("<unknown>");
+
+        if json {
+            let data_json = decode_message_json(&msg, channel, &schemas, &schema_parsers);
+            let obj = serde_json::json!({
+                "topic": topic,
+                "sequence": msg.sequence,
+                "log_time": msg.log_time,
+                "publish_time": msg.publish_time,
+                "data": data_json,
+            });
+            serde_json::to_writer(&mut *out, &obj).cli()?;
+            out.write_all(b"\n").cli()?;
+        } else {
+            writeln!(
+                out,
+                "{} {} {} {} {}",
+                topic, msg.channel_id, msg.sequence, msg.log_time, msg.publish_time
+            )
+            .cli()?;
+            out.write_all(msg.data()).cli()?;
+        }
     }
 
     Ok(())
+}
+
+fn decode_message_json(
+    msg: &mcapable_core::Message,
+    channel: Option<&mcapable_core::Channel>,
+    schemas: &std::sync::Arc<HashMap<u16, mcapable_core::Schema>>,
+    schema_parsers: &HashMap<u16, mcapable_core::stream::schema_parser::SchemaParser>,
+) -> serde_json::Value {
+    let data = msg.data();
+    let schema_id = channel.map(|c| c.schema_id).unwrap_or(0);
+    let message_encoding = channel.map(|c| c.message_encoding.as_ref()).unwrap_or("");
+
+    // Try schema-based parsing first (protobuf, flatbuffer, ros1msg, etc.)
+    if schema_id != 0 {
+        if let Some(parser) = schema_parsers.get(&schema_id) {
+            match parser.parse_json(bytes::Bytes::copy_from_slice(data)) {
+                Ok(value) => return value,
+                Err(e) => {
+                    eprintln!(
+                        "warning: failed to decode message on channel {}: {e}",
+                        msg.channel_id
+                    );
+                }
+            }
+        }
+    }
+
+    // Try message-encoding-based parsing
+    if message_encoding == "json" {
+        if let Ok(value) = serde_json::from_slice::<serde_json::Value>(data) {
+            return value;
+        }
+    }
+
+    // For jsonschema encoding without a schema parser, try raw JSON parse
+    if let Some(schema) = schemas.get(&schema_id) {
+        if schema.encoding.as_ref() == "jsonschema" {
+            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(data) {
+                return value;
+            }
+        }
+    }
+
+    // Fallback: null
+    serde_json::Value::Null
 }

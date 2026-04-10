@@ -13,7 +13,7 @@ pub(crate) struct ChunkState {
     pub(crate) message_prefixes: Vec<u8>,
     pub(crate) payloads: Vec<Bytes>,
     pub(crate) uncompressed_len: usize,
-    pub(crate) uncompressed_crc: crc32fast::Hasher,
+    pub(crate) uncompressed_crc: Option<crc32fast::Hasher>,
     pub(crate) message_start_time: u64,
     pub(crate) message_end_time: u64,
     pub(crate) has_messages: bool,
@@ -31,12 +31,17 @@ pub(crate) struct ChunkFlushData {
 
 impl ChunkState {
     pub(crate) fn new(options: super::api::ChunkOptions) -> Self {
+        let crc_hasher = if options.include_crc {
+            Some(crc32fast::Hasher::new())
+        } else {
+            None
+        };
         Self {
             options,
             message_prefixes: Vec::new(),
             payloads: Vec::new(),
             uncompressed_len: 0,
-            uncompressed_crc: crc32fast::Hasher::new(),
+            uncompressed_crc: crc_hasher,
             message_start_time: 0,
             message_end_time: 0,
             has_messages: false,
@@ -65,8 +70,10 @@ impl ChunkState {
         prefix[15..23].copy_from_slice(&log_time.to_le_bytes());
         prefix[23..31].copy_from_slice(&publish_time.to_le_bytes());
 
-        self.uncompressed_crc.update(&prefix);
-        self.uncompressed_crc.update(payload.as_ref());
+        if let Some(hasher) = &mut self.uncompressed_crc {
+            hasher.update(&prefix);
+            hasher.update(payload.as_ref());
+        }
 
         self.message_prefixes.extend_from_slice(&prefix);
         self.payloads.push(payload);
@@ -92,8 +99,13 @@ impl ChunkState {
         let message_prefixes = std::mem::take(&mut self.message_prefixes);
         let payloads = std::mem::take(&mut self.payloads);
         let uncompressed_size: u64 = std::mem::take(&mut self.uncompressed_len) as u64;
-        let uncompressed_crc = std::mem::take(&mut self.uncompressed_crc).finalize();
-        self.uncompressed_crc = crc32fast::Hasher::new();
+        let uncompressed_crc = match self.uncompressed_crc.take() {
+            Some(hasher) => hasher.finalize(),
+            None => 0,
+        };
+        if self.options.include_crc {
+            self.uncompressed_crc = Some(crc32fast::Hasher::new());
+        }
         self.has_messages = false;
 
         ChunkFlushData {
@@ -204,6 +216,7 @@ mod tests {
         let mut state = ChunkState::new(super::super::api::ChunkOptions {
             compression: None,
             max_uncompressed_bytes: 10_000,
+            include_crc: true,
         });
 
         state.push_message(1, 0, 10, 10, Bytes::from_static(b"abc"));
@@ -226,5 +239,41 @@ mod tests {
             flush.uncompressed_crc,
             crate::compression::calculate_crc(&expected)
         );
+    }
+
+    #[test]
+    fn chunk_state_crc_is_zero_when_disabled() {
+        let mut state = ChunkState::new(super::super::api::ChunkOptions {
+            compression: None,
+            max_uncompressed_bytes: 10_000,
+            include_crc: false,
+        });
+
+        state.push_message(1, 0, 10, 10, Bytes::from_static(b"abc"));
+        state.push_message(1, 1, 20, 20, Bytes::from_static(b"xyz"));
+        assert!(state.uncompressed_crc.is_none());
+
+        let flush = state.take_for_flush();
+        assert_eq!(flush.uncompressed_crc, 0);
+        assert!(flush.uncompressed_size > 0);
+    }
+
+    #[test]
+    fn prepared_chunk_crc_field_is_zero_when_disabled() {
+        let mut state = ChunkState::new(super::super::api::ChunkOptions {
+            compression: None,
+            max_uncompressed_bytes: 10_000,
+            include_crc: false,
+        });
+
+        state.push_message(1, 0, 100, 100, Bytes::from_static(b"hello"));
+        let flush = state.take_for_flush();
+        let prepared = prepare_chunk_for_write(0, &flush).unwrap();
+
+        // CRC field is at bytes 24..28 of the record prefix
+        // (after message_start_time:8 + message_end_time:8 + uncompressed_size:8)
+        let crc_bytes = &prepared.record_prefix[24..28];
+        let crc_value = u32::from_le_bytes(crc_bytes.try_into().unwrap());
+        assert_eq!(crc_value, 0);
     }
 }

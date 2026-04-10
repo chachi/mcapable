@@ -77,6 +77,11 @@ pub struct ChunkOptions {
     pub compression: Option<Compression>,
     /// Flush chunk when uncompressed buffer reaches this size.
     pub max_uncompressed_bytes: usize,
+    /// Include CRC32 checksums in chunk records (default: `true`).
+    ///
+    /// When `false`, the chunk `uncompressed_crc` field is written as `0`
+    /// and the per-message CRC computation is skipped entirely.
+    pub include_crc: bool,
 }
 
 impl Default for ChunkOptions {
@@ -84,6 +89,7 @@ impl Default for ChunkOptions {
         Self {
             compression: None,
             max_uncompressed_bytes: DEFAULT_CHUNK_MAX_UNCOMPRESSED_BYTES,
+            include_crc: true,
         }
     }
 }
