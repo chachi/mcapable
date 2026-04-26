@@ -117,4 +117,13 @@ fn copy_channel_with_override_routes_to_override_stream() {
         none_chunks > 0,
         "expected at least one uncompressed chunk for copied channel"
     );
+    let zstd_chunks: usize = summary
+        .chunk_indexes
+        .iter()
+        .filter(|ci| ci.compression.as_ref() == "zstd")
+        .count();
+    assert_eq!(
+        zstd_chunks, 0,
+        "no messages were written to the default zstd channel; expected 0 zstd chunks",
+    );
 }

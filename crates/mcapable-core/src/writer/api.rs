@@ -341,7 +341,8 @@ impl<W: Write + Seek> Writer<W> {
     /// `add_channel(ChannelSpec::...chunk_override(options))` for the spec
     /// path; this variant is for pipelines that only have a parsed `Channel`.
     ///
-    /// Preserves the channel id from `channel`.
+    /// Preserves the channel id from `channel`. Calling this twice for the
+    /// same channel id silently overwrites the first override registration.
     pub fn copy_channel_with_override(
         &mut self,
         channel: &Channel,

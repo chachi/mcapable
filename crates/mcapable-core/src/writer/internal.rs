@@ -163,6 +163,17 @@ impl<W: Write + Seek> WriterImpl<W> {
         Ok(())
     }
 
+    /// Insert (or replace) an override `ChunkState` at the given channel-id
+    /// slot, growing `override_streams` if needed. Silently overwrites any
+    /// previously registered override for the same channel.
+    fn set_override_slot(&mut self, idx: usize, state: ChunkState) {
+        if self.override_streams.len() <= idx {
+            self.override_streams
+                .resize_with(idx.saturating_add(1), || None);
+        }
+        self.override_streams[idx] = Some(state);
+    }
+
     fn encode_schema_payload(schema: &Schema) -> Result<Vec<u8>> {
         let mut payload = Vec::new();
         encode::push_le_u16(&mut payload, schema.id);
@@ -311,12 +322,7 @@ impl<W: Write + Seek> WriterImpl<W> {
         self.write_channel_internal(&channel)?;
 
         let has_override = if let Some(opts) = spec.chunk_override {
-            let idx = id as usize;
-            if self.override_streams.len() <= idx {
-                self.override_streams
-                    .resize_with(idx.saturating_add(1), || None);
-            }
-            self.override_streams[idx] = Some(ChunkState::new(opts));
+            self.set_override_slot(id as usize, ChunkState::new(opts));
             true
         } else {
             false
@@ -326,14 +332,9 @@ impl<W: Write + Seek> WriterImpl<W> {
     }
 
     /// Register an override `ChunkState` for an already-known channel id.
-    /// Used by `Writer::copy_channel_with_override`.
+    /// Silently overwrites any previously registered override for the same channel.
     pub(crate) fn register_channel_override(&mut self, channel_id: u16, options: ChunkOptions) {
-        let idx = channel_id as usize;
-        if self.override_streams.len() <= idx {
-            self.override_streams
-                .resize_with(idx.saturating_add(1), || None);
-        }
-        self.override_streams[idx] = Some(ChunkState::new(options));
+        self.set_override_slot(channel_id as usize, ChunkState::new(options));
     }
 
     pub(crate) fn write_attachment_internal(
