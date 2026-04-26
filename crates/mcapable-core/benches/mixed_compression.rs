@@ -5,6 +5,8 @@
 //! with repeating 256 B payloads (highly compressible). Three write modes:
 //! all-compressed (baseline), mixed (video uncompressed via override,
 //! telemetry compressed), all-uncompressed (upper bound on speed).
+//!
+//! Run with: `cargo bench -p mcapable-core --bench mixed_compression`
 
 use bytes::Bytes;
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
@@ -153,7 +155,7 @@ fn bench_writes(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(mode.label()), &mode, |b, &m| {
             b.iter(|| {
                 let bytes = write_one(black_box(&msgs), m);
-                black_box(bytes.len());
+                let _ = black_box(bytes);
             });
         });
     }
