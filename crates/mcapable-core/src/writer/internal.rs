@@ -154,6 +154,15 @@ impl<W: Write + Seek> WriterImpl<W> {
         Ok(())
     }
 
+    /// Give every populated override stream a chance to flush at its threshold.
+    /// Cheap when nothing is at threshold (one `should_flush` check per slot).
+    fn flush_overrides_if_needed_all(&mut self, force: bool) -> Result<()> {
+        for idx in 0..self.override_streams.len() {
+            self.flush_override_if_needed(idx, force)?;
+        }
+        Ok(())
+    }
+
     fn encode_schema_payload(schema: &Schema) -> Result<Vec<u8>> {
         let mut payload = Vec::new();
         encode::push_le_u16(&mut payload, schema.id);
@@ -330,6 +339,7 @@ impl<W: Write + Seek> WriterImpl<W> {
             ));
         }
         self.write_header()?;
+        self.flush_overrides_if_needed_all(false)?;
         self.flush_chunk_if_needed(false)?;
 
         // Detach small string fields from any large backing buffers (e.g. record-copy tooling).
@@ -393,6 +403,7 @@ impl<W: Write + Seek> WriterImpl<W> {
             ));
         }
         self.write_header()?;
+        self.flush_overrides_if_needed_all(false)?;
         self.flush_chunk_if_needed(false)?;
 
         // Detach small string fields from any large backing buffers (e.g. record-copy tooling).
@@ -464,6 +475,7 @@ impl<W: Write + Seek> WriterImpl<W> {
 
         // Ensure header is written and any buffered chunk is flushed before copying raw records.
         self.write_header()?;
+        self.flush_overrides_if_needed_all(false)?;
         self.flush_chunk_if_needed(false)?;
 
         match opcode {
@@ -607,6 +619,7 @@ impl<W: Write + Seek> WriterImpl<W> {
 
         // Ensure header is written and any buffered chunk is flushed before copying raw records.
         self.write_header()?;
+        self.flush_overrides_if_needed_all(false)?;
         self.flush_chunk_if_needed(false)?;
 
         let start = self.sink.position();
@@ -749,6 +762,7 @@ impl<W: Write + Seek> WriterImpl<W> {
             ));
         }
         self.write_header()?;
+        self.flush_overrides_if_needed_all(false)?;
         self.flush_chunk_if_needed(false)?;
 
         let mut schema = schema.clone();
@@ -779,6 +793,7 @@ impl<W: Write + Seek> WriterImpl<W> {
             ));
         }
         self.write_header()?;
+        self.flush_overrides_if_needed_all(false)?;
         self.flush_chunk_if_needed(false)?;
 
         let mut channel = channel.clone();
@@ -815,6 +830,7 @@ impl<W: Write + Seek> WriterImpl<W> {
                 message.publish_time,
                 message.data_bytes(),
             );
+            self.flush_overrides_if_needed_all(false)?;
             self.flush_chunk_if_needed(false)?;
             return Ok(());
         }
@@ -882,6 +898,7 @@ impl<W: Write + Seek> WriterImpl<W> {
             ));
         }
         self.write_header()?;
+        self.flush_overrides_if_needed_all(false)?;
         self.flush_chunk_if_needed(false)?;
         self.update_channel_stats(channel_id, log_time);
 
@@ -904,6 +921,7 @@ impl<W: Write + Seek> WriterImpl<W> {
             ));
         }
         self.write_header()?;
+        self.flush_overrides_if_needed_all(false)?;
         self.flush_chunk_if_needed(false)?;
 
         let start = self.sink.position();
