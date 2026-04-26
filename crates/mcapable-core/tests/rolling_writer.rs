@@ -903,3 +903,226 @@ fn add_channel_after_finish_errors() {
     let result = rolling.add_channel(ChannelSpec::new("/topic", "json"));
     assert!(result.is_err());
 }
+
+/// Override channels are routed to dedicated uncompressed chunk streams,
+/// just like the base Writer.
+#[test]
+fn rolling_writer_routes_override_channel_to_uncompressed_chunks() {
+    use mcapable_core::Compression;
+    use mcapable_core::writer::SchemaSpec;
+
+    let (factory, files) = CollectingFactory::new();
+
+    let mut rolling = RollingWriterBuilder::new(factory, MessageCount::new(1_000))
+        .writer_builder(WriterBuilder::new().chunked(ChunkOptions {
+            compression: Some(Compression::Zstd),
+            max_uncompressed_bytes: 64,
+            include_crc: true,
+        }))
+        .build()
+        .unwrap();
+
+    let schema = SchemaSpec::new("pkg/Msg", "raw", Bytes::from_static(b""));
+    let mut default_ch = rolling
+        .add_channel(ChannelSpec::new("/telemetry", "raw").schema(schema.clone()))
+        .unwrap();
+    let mut override_ch = rolling
+        .add_channel(
+            ChannelSpec::new("/video", "h264")
+                .schema(schema)
+                .uncompressed_chunks(),
+        )
+        .unwrap();
+
+    for i in 0..6u64 {
+        default_ch
+            .write(1000 + i, 1000 + i, vec![b'a'; 80])
+            .unwrap();
+        override_ch
+            .write(1000 + i, 1000 + i, vec![b'b'; 80])
+            .unwrap();
+    }
+    drop(default_ch);
+    drop(override_ch);
+    rolling.finish().unwrap();
+    drop(rolling);
+
+    let files = files.lock().unwrap();
+    assert_eq!(files.len(), 1, "single file expected (no split triggered)");
+    let bytes = &files[0];
+
+    let mut reader = mcapable_core::reader::Reader::from_slice(bytes).unwrap();
+    let summary = reader.summary().unwrap().expect("summary");
+
+    let zstd_count = summary
+        .chunk_indexes
+        .iter()
+        .filter(|ci| ci.compression.as_ref() == "zstd")
+        .count();
+    let none_count = summary
+        .chunk_indexes
+        .iter()
+        .filter(|ci| ci.compression.as_ref().is_empty())
+        .count();
+    assert!(
+        zstd_count > 0,
+        "expected at least one zstd chunk for default channel"
+    );
+    assert!(
+        none_count > 0,
+        "expected at least one uncompressed chunk for override channel"
+    );
+}
+
+/// After a forced split, the new file independently re-registers the
+/// override channel so its messages still land in uncompressed chunks.
+#[test]
+fn rolling_writer_re_registers_override_after_split() {
+    use mcapable_core::Compression;
+    use mcapable_core::writer::SchemaSpec;
+
+    let (factory, files) = CollectingFactory::new();
+
+    let mut rolling = RollingWriterBuilder::new(factory, MessageCount::new(10_000))
+        .writer_builder(WriterBuilder::new().chunked(ChunkOptions {
+            compression: Some(Compression::Zstd),
+            max_uncompressed_bytes: 64,
+            include_crc: true,
+        }))
+        .build()
+        .unwrap();
+
+    let schema = SchemaSpec::new("pkg/Msg", "raw", Bytes::from_static(b""));
+    let mut override_ch = rolling
+        .add_channel(
+            ChannelSpec::new("/video", "h264")
+                .schema(schema)
+                .uncompressed_chunks(),
+        )
+        .unwrap();
+
+    // Write into file 0
+    for i in 0..4u64 {
+        override_ch
+            .write(1000 + i, 1000 + i, vec![b'a'; 80])
+            .unwrap();
+    }
+    rolling.force_split().unwrap();
+    // Write into file 1
+    for i in 0..4u64 {
+        override_ch
+            .write(2000 + i, 2000 + i, vec![b'b'; 80])
+            .unwrap();
+    }
+    drop(override_ch);
+    rolling.finish().unwrap();
+    drop(rolling);
+
+    let files = files.lock().unwrap();
+    assert_eq!(files.len(), 2, "expected two files after one split");
+
+    for (idx, file_bytes) in files.iter().enumerate() {
+        let mut reader = mcapable_core::reader::Reader::from_slice(file_bytes).unwrap();
+        let summary = reader.summary().unwrap().expect("summary");
+        let none_count = summary
+            .chunk_indexes
+            .iter()
+            .filter(|ci| ci.compression.as_ref().is_empty())
+            .count();
+        assert!(
+            none_count > 0,
+            "file {idx} must contain at least one uncompressed chunk after re-registration",
+        );
+    }
+}
+
+/// Override chunks must not span file boundaries: a partial override chunk
+/// at split time gets drained into the closing file, and the next file
+/// starts cleanly.
+#[test]
+fn rolling_writer_override_chunks_do_not_span_files() {
+    let (factory, files) = CollectingFactory::new();
+
+    let mut rolling = RollingWriterBuilder::new(factory, MessageCount::new(10_000))
+        .writer_builder(WriterBuilder::new().chunked(ChunkOptions {
+            compression: None,
+            max_uncompressed_bytes: 1 << 20, // huge default — won't flush
+            include_crc: true,
+        }))
+        .build()
+        .unwrap();
+
+    let mut override_ch = rolling
+        .add_channel(
+            ChannelSpec::new("/video", "h264").chunk_override(ChunkOptions {
+                compression: None,
+                max_uncompressed_bytes: 1 << 20, // huge — won't flush mid-write
+                include_crc: true,
+            }),
+        )
+        .unwrap();
+
+    // Write a few messages — well under threshold, so the override chunk is
+    // partially filled when we force the split.
+    override_ch.write(1, 1, vec![b'a'; 16]).unwrap();
+    override_ch.write(2, 2, vec![b'b'; 16]).unwrap();
+    rolling.force_split().unwrap();
+    // Write into file 1.
+    override_ch.write(3, 3, vec![b'c'; 16]).unwrap();
+    drop(override_ch);
+    rolling.finish().unwrap();
+    drop(rolling);
+
+    let files = files.lock().unwrap();
+    assert_eq!(files.len(), 2);
+
+    // File 0 must contain exactly one uncompressed chunk (the partial fill
+    // drained at split-time finish).
+    let mut reader0 = mcapable_core::reader::Reader::from_slice(&files[0]).unwrap();
+    let summary0 = reader0.summary().unwrap().expect("summary 0");
+    let none_count0 = summary0
+        .chunk_indexes
+        .iter()
+        .filter(|ci| ci.compression.as_ref().is_empty())
+        .count();
+    assert_eq!(
+        none_count0, 1,
+        "file 0 must have exactly 1 uncompressed chunk"
+    );
+
+    let log_times0: Vec<u64> = reader0
+        .raw_messages()
+        .unwrap()
+        .map(|m| m.unwrap().log_time)
+        .collect();
+    assert_eq!(
+        log_times0,
+        vec![1, 2],
+        "file 0 must contain the 2 pre-split override messages",
+    );
+
+    // File 1 must independently produce its own uncompressed chunk for the
+    // post-split message.
+    let mut reader1 = mcapable_core::reader::Reader::from_slice(&files[1]).unwrap();
+    let summary1 = reader1.summary().unwrap().expect("summary 1");
+    let none_count1 = summary1
+        .chunk_indexes
+        .iter()
+        .filter(|ci| ci.compression.as_ref().is_empty())
+        .count();
+    assert_eq!(
+        none_count1, 1,
+        "file 1 must have exactly 1 uncompressed chunk"
+    );
+
+    let log_times1: Vec<u64> = reader1
+        .raw_messages()
+        .unwrap()
+        .map(|m| m.unwrap().log_time)
+        .collect();
+    assert_eq!(
+        log_times1,
+        vec![3],
+        "file 1 must contain only the post-split override message",
+    );
+}

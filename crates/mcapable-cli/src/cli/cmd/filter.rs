@@ -6,24 +6,43 @@ use super::{
     CliResult, OutputOptions,
 };
 
-#[allow(clippy::too_many_arguments)]
-pub fn run(
-    input: Option<String>,
-    output: Option<String>,
-    topics: Vec<String>,
-    start: Option<String>,
-    end: Option<String>,
-    start_secs: Option<u64>,
-    start_nsecs: Option<u32>,
-    end_secs: Option<u64>,
-    end_nsecs: Option<u32>,
-    include_topic_regex: Vec<String>,
-    exclude_topic_regex: Vec<String>,
-    last_per_channel_topic_regex: Vec<String>,
-    include_metadata: bool,
-    include_attachments: bool,
-    output_options: OutputOptions,
-) -> Result<(), String> {
+pub struct FilterOptions {
+    pub input: Option<String>,
+    pub output: Option<String>,
+    pub topics: Vec<String>,
+    pub start: Option<String>,
+    pub end: Option<String>,
+    pub start_secs: Option<u64>,
+    pub start_nsecs: Option<u32>,
+    pub end_secs: Option<u64>,
+    pub end_nsecs: Option<u32>,
+    pub include_topic_regex: Vec<String>,
+    pub exclude_topic_regex: Vec<String>,
+    pub last_per_channel_topic_regex: Vec<String>,
+    pub include_metadata: bool,
+    pub include_attachments: bool,
+    pub output_options: OutputOptions,
+}
+
+pub fn run(opts: FilterOptions) -> Result<(), String> {
+    let FilterOptions {
+        input,
+        output,
+        topics,
+        start,
+        end,
+        start_secs,
+        start_nsecs,
+        end_secs,
+        end_nsecs,
+        include_topic_regex,
+        exclude_topic_regex,
+        last_per_channel_topic_regex,
+        include_metadata,
+        include_attachments,
+        output_options,
+    } = opts;
+
     if !topics.is_empty() && !include_topic_regex.is_empty() {
         return Err(
             "cannot use both --topics and --include-topic-regex at the same time".to_string(),

@@ -71,7 +71,7 @@ impl Default for Validation {
 }
 
 /// Configuration for chunked message writing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChunkOptions {
     /// Compression algorithm to apply to chunk record bodies.
     pub compression: Option<Compression>,
@@ -127,6 +127,11 @@ pub struct ChannelSpec {
     pub schema: Option<SchemaSpec>,
     /// Channel metadata map.
     pub metadata: HashMap<ByteStr, ByteStr>,
+    /// When `Some`, messages on this channel land in their own dedicated
+    /// chunk stream configured by these options. When `None`, messages flow
+    /// into the writer's default chunk stream (or top-level if the writer
+    /// was built without `.chunked(...)`).
+    pub chunk_override: Option<ChunkOptions>,
 }
 
 impl ChannelSpec {
@@ -137,6 +142,7 @@ impl ChannelSpec {
             message_encoding: message_encoding.into(),
             schema: None,
             metadata: HashMap::new(),
+            chunk_override: None,
         }
     }
 
@@ -151,6 +157,26 @@ impl ChannelSpec {
         self.metadata = metadata;
         self
     }
+
+    /// Route this channel's messages into a dedicated chunk stream configured
+    /// by `options`. Useful for writing already-compressed payloads as
+    /// uncompressed chunks while the rest of the file uses compression.
+    pub fn chunk_override(mut self, options: ChunkOptions) -> Self {
+        self.chunk_override = Some(options);
+        self
+    }
+
+    /// Convenience: route this channel into a dedicated chunk stream with
+    /// `compression: None`. Other `ChunkOptions` fields take their defaults.
+    pub fn uncompressed_chunks(mut self) -> Self {
+        // `compression: None` is explicit — guards intent against any future
+        // change to `ChunkOptions::default()`'s compression default.
+        self.chunk_override = Some(ChunkOptions {
+            compression: None,
+            ..ChunkOptions::default()
+        });
+        self
+    }
 }
 
 /// A per-channel helper for writing messages with automatic sequence numbering.
@@ -159,6 +185,10 @@ pub struct ChannelWriter<W: Write + Seek> {
     pub(crate) inner: Rc<RefCell<WriterImpl<W>>>,
     pub(crate) channel_id: u16,
     pub(crate) next_sequence: u32,
+    /// True iff this channel has a `chunk_override` registered in
+    /// `WriterImpl::override_streams`. Cached so the per-message
+    /// write path can dispatch with one bool branch and never hash.
+    pub(crate) has_chunk_override: bool,
 }
 
 impl<W: Write + Seek> ChannelWriter<W> {
@@ -195,13 +225,19 @@ impl<W: Write + Seek> ChannelWriter<W> {
         sequence: u32,
     ) -> Result<()> {
         let bytes = data.into_payload_bytes();
-        self.inner.borrow_mut().write_raw_message(&RawMessage::new(
+        let msg = RawMessage::new(
             self.channel_id,
             sequence,
             log_time,
             publish_time,
             Payload::from_bytes(bytes),
-        ))
+        );
+        let mut inner = self.inner.borrow_mut();
+        if self.has_chunk_override {
+            inner.write_raw_message_override(&msg)
+        } else {
+            inner.write_raw_message_default(&msg)
+        }
     }
 }
 
@@ -262,11 +298,12 @@ impl<W: Write + Seek> Writer<W> {
     /// The channel ID is automatically assigned. Use the returned `ChannelWriter`
     /// to write messages to this channel.
     pub fn add_channel(&mut self, spec: ChannelSpec) -> Result<ChannelWriter<W>> {
-        let channel_id = self.inner.borrow_mut().add_channel_spec(spec)?;
+        let (channel_id, has_chunk_override) = self.inner.borrow_mut().add_channel_spec(spec)?;
         Ok(ChannelWriter {
             inner: Rc::clone(&self.inner),
             channel_id,
             next_sequence: 0,
+            has_chunk_override,
         })
     }
 
@@ -295,6 +332,31 @@ impl<W: Write + Seek> Writer<W> {
             inner: Rc::clone(&self.inner),
             channel_id: channel.id,
             next_sequence: 0,
+            has_chunk_override: false,
+        })
+    }
+
+    /// Copy a channel from another MCAP file *and* route its messages into a
+    /// dedicated chunk stream configured by `options`. Equivalent to
+    /// `add_channel(ChannelSpec::...chunk_override(options))` for the spec
+    /// path; this variant is for pipelines that only have a parsed `Channel`.
+    ///
+    /// Preserves the channel id from `channel`. Calling this twice for the
+    /// same channel id silently overwrites the first override registration.
+    pub fn copy_channel_with_override(
+        &mut self,
+        channel: &Channel,
+        options: ChunkOptions,
+    ) -> Result<ChannelWriter<W>> {
+        let mut inner = self.inner.borrow_mut();
+        inner.write_channel_internal(channel)?;
+        inner.register_channel_override(channel.id, options);
+        drop(inner);
+        Ok(ChannelWriter {
+            inner: Rc::clone(&self.inner),
+            channel_id: channel.id,
+            next_sequence: 0,
+            has_chunk_override: true,
         })
     }
 
@@ -407,5 +469,64 @@ impl<W: Write + Seek> Writer<W> {
     /// Finalize the file (DataEnd, Footer, trailing magic bytes).
     pub fn finish(&mut self) -> Result<()> {
         self.inner.borrow_mut().finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compression::Compression;
+
+    #[test]
+    fn channel_spec_carries_chunk_override() {
+        let opts = ChunkOptions {
+            compression: None,
+            max_uncompressed_bytes: 1024,
+            include_crc: false,
+        };
+        let spec = ChannelSpec::new("/cam", "h264").chunk_override(opts.clone());
+        assert_eq!(spec.chunk_override, Some(opts));
+    }
+
+    #[test]
+    fn channel_spec_uncompressed_chunks_helper_sets_compression_none() {
+        let spec = ChannelSpec::new("/cam", "h264").uncompressed_chunks();
+        let chunk = spec.chunk_override.expect("override set");
+        assert!(chunk.compression.is_none());
+    }
+
+    #[test]
+    fn channel_spec_default_has_no_override() {
+        let spec = ChannelSpec::new("/cam", "h264");
+        assert!(spec.chunk_override.is_none());
+    }
+
+    #[test]
+    fn chunk_options_eq() {
+        let a = ChunkOptions {
+            compression: Some(Compression::Zstd),
+            max_uncompressed_bytes: 4096,
+            include_crc: true,
+        };
+        let b = a.clone();
+        assert_eq!(a, b);
+
+        // Confirm PartialEq actually discriminates field changes — guards
+        // against a hypothetical hand-rolled impl that ignored a field.
+        let differs_compression = ChunkOptions {
+            compression: None,
+            ..a.clone()
+        };
+        let differs_size = ChunkOptions {
+            max_uncompressed_bytes: 0,
+            ..a.clone()
+        };
+        let differs_crc = ChunkOptions {
+            include_crc: false,
+            ..a.clone()
+        };
+        assert_ne!(a, differs_compression);
+        assert_ne!(a, differs_size);
+        assert_ne!(a, differs_crc);
     }
 }

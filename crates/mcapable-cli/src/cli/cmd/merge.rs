@@ -29,27 +29,11 @@ pub fn run(
         .map(|(k, v)| (*k, v.clone()))
         .collect();
 
-    // For coalescing: map (file_index, original_channel_id) -> output_channel_id
-    let mut channel_map: HashMap<(usize, u16), u16> = HashMap::new();
-    let mut output_channels: HashMap<u16, mcapable_core::Channel> = HashMap::new();
-    let mut next_channel_id: u16 = 0;
-
-    // Index channels by (topic, schema_id) for coalescing
-    let mut coalesce_index: HashMap<(String, u16), u16> = HashMap::new();
+    let mut registry = ChannelRegistry::new();
 
     // Add channels from first file
     for (id, ch) in first_reader.channels().iter() {
-        let out_id = assign_channel(
-            &coalesce_channels,
-            0,
-            *id,
-            ch,
-            &mut channel_map,
-            &mut output_channels,
-            &mut coalesce_index,
-            &mut next_channel_id,
-        )?;
-        let _ = out_id;
+        registry.assign(&coalesce_channels, 0, *id, ch)?;
     }
 
     for (file_idx_offset, input) in rest.iter().enumerate() {
@@ -76,16 +60,7 @@ pub fn run(
             }
         }
         for (id, ch) in reader.channels().iter() {
-            assign_channel(
-                &coalesce_channels,
-                file_idx,
-                *id,
-                ch,
-                &mut channel_map,
-                &mut output_channels,
-                &mut coalesce_index,
-                &mut next_channel_id,
-            )?;
+            registry.assign(&coalesce_channels, file_idx, *id, ch)?;
         }
     }
 
@@ -97,7 +72,7 @@ pub fn run(
         writer.copy_schema(schema).cli()?;
     }
     let mut channel_writers = HashMap::new();
-    for channel in output_channels.values() {
+    for channel in registry.output_channels.values() {
         let channel_writer = writer.copy_channel(channel).cli()?;
         channel_writers.insert(channel.id, channel_writer);
     }
@@ -131,7 +106,8 @@ pub fn run(
     });
 
     for (file_idx, msg) in all_messages {
-        let out_channel_id = channel_map
+        let out_channel_id = registry
+            .channel_map
             .get(&(file_idx, msg.channel_id))
             .copied()
             .unwrap_or(msg.channel_id);
@@ -152,61 +128,78 @@ pub fn run(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-fn assign_channel(
-    mode: &str,
-    file_idx: usize,
-    original_id: u16,
-    channel: &mcapable_core::Channel,
-    channel_map: &mut HashMap<(usize, u16), u16>,
-    output_channels: &mut HashMap<u16, mcapable_core::Channel>,
-    coalesce_index: &mut HashMap<(String, u16), u16>,
-    next_id: &mut u16,
-) -> Result<u16, String> {
-    match mode {
-        "auto" | "force" => {
-            let key = (channel.topic.as_ref().to_string(), channel.schema_id);
-            if let Some(&existing_out_id) = coalesce_index.get(&key) {
-                let existing = &output_channels[&existing_out_id];
-                if mode == "auto" && existing.metadata != channel.metadata {
-                    return Err(format!(
-                        "conflicting metadata for topic {} (use --coalesce-channels force to ignore)",
-                        channel.topic
-                    ));
-                }
-                channel_map.insert((file_idx, original_id), existing_out_id);
-                Ok(existing_out_id)
-            } else {
-                let out_id = *next_id;
-                *next_id = next_id.checked_add(1).ok_or("too many channels")?;
-                let mut out_channel = channel.clone();
-                out_channel.id = out_id;
-                output_channels.insert(out_id, out_channel);
-                coalesce_index.insert(key, out_id);
-                channel_map.insert((file_idx, original_id), out_id);
-                Ok(out_id)
-            }
+/// Tracks channel assignment state across multiple input files for merging.
+struct ChannelRegistry {
+    channel_map: HashMap<(usize, u16), u16>,
+    output_channels: HashMap<u16, mcapable_core::Channel>,
+    coalesce_index: HashMap<(String, u16), u16>,
+    next_id: u16,
+}
+
+impl ChannelRegistry {
+    fn new() -> Self {
+        Self {
+            channel_map: HashMap::new(),
+            output_channels: HashMap::new(),
+            coalesce_index: HashMap::new(),
+            next_id: 0,
         }
-        "none" => {
-            match output_channels.entry(original_id) {
-                std::collections::hash_map::Entry::Occupied(entry) => {
-                    if entry.get() != channel {
+    }
+
+    fn assign(
+        &mut self,
+        mode: &str,
+        file_idx: usize,
+        original_id: u16,
+        channel: &mcapable_core::Channel,
+    ) -> Result<u16, String> {
+        match mode {
+            "auto" | "force" => {
+                let key = (channel.topic.as_ref().to_string(), channel.schema_id);
+                if let Some(&existing_out_id) = self.coalesce_index.get(&key) {
+                    let existing = &self.output_channels[&existing_out_id];
+                    if mode == "auto" && existing.metadata != channel.metadata {
                         return Err(format!(
-                            "conflicting channel id {} (use --coalesce-channels auto to coalesce)",
-                            original_id
+                            "conflicting metadata for topic {} (use --coalesce-channels force to ignore)",
+                            channel.topic
                         ));
                     }
-                }
-                std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(channel.clone());
+                    self.channel_map
+                        .insert((file_idx, original_id), existing_out_id);
+                    Ok(existing_out_id)
+                } else {
+                    let out_id = self.next_id;
+                    self.next_id = self.next_id.checked_add(1).ok_or("too many channels")?;
+                    let mut out_channel = channel.clone();
+                    out_channel.id = out_id;
+                    self.output_channels.insert(out_id, out_channel);
+                    self.coalesce_index.insert(key, out_id);
+                    self.channel_map.insert((file_idx, original_id), out_id);
+                    Ok(out_id)
                 }
             }
-            channel_map.insert((file_idx, original_id), original_id);
-            if original_id >= *next_id {
-                *next_id = original_id.saturating_add(1);
+            "none" => {
+                match self.output_channels.entry(original_id) {
+                    std::collections::hash_map::Entry::Occupied(entry) => {
+                        if entry.get() != channel {
+                            return Err(format!(
+                                "conflicting channel id {} (use --coalesce-channels auto to coalesce)",
+                                original_id
+                            ));
+                        }
+                    }
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        entry.insert(channel.clone());
+                    }
+                }
+                self.channel_map
+                    .insert((file_idx, original_id), original_id);
+                if original_id >= self.next_id {
+                    self.next_id = original_id.saturating_add(1);
+                }
+                Ok(original_id)
             }
-            Ok(original_id)
+            _ => Err(format!("unknown coalesce-channels mode: {mode}")),
         }
-        _ => Err(format!("unknown coalesce-channels mode: {mode}")),
     }
 }

@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{Read, Seek, Write};
+use std::io::{Seek, Write};
 use std::path::PathBuf;
 
 use crate::cli::input;
@@ -429,13 +429,6 @@ pub(crate) fn parse_metadata_kv_pairs(
         map.insert(k.to_string().into(), v.to_string().into());
     }
     Ok(map)
-}
-
-#[allow(dead_code)]
-fn read_to_vec(reader: &mut dyn Read) -> Result<Vec<u8>, String> {
-    let mut bytes = Vec::new();
-    reader.read_to_end(&mut bytes).cli()?;
-    Ok(bytes)
 }
 
 pub(crate) fn now_ns() -> Result<u64, String> {

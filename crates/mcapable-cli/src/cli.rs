@@ -350,7 +350,7 @@ pub fn main_entry() -> std::process::ExitCode {
             include_metadata,
             include_attachments,
             output_options,
-        } => cmd::filter::run(
+        } => cmd::filter::run(cmd::filter::FilterOptions {
             input,
             output,
             topics,
@@ -366,7 +366,7 @@ pub fn main_entry() -> std::process::ExitCode {
             include_metadata,
             include_attachments,
             output_options,
-        ),
+        }),
         Command::Merge {
             output,
             inputs,
@@ -390,7 +390,7 @@ pub fn main_entry() -> std::process::ExitCode {
             end_secs,
             end_nsecs,
             json,
-        } => cmd::cat::run(
+        } => cmd::cat::run(cmd::cat::CatOptions {
             input,
             topics,
             start,
@@ -400,7 +400,7 @@ pub fn main_entry() -> std::process::ExitCode {
             end_secs,
             end_nsecs,
             json,
-        ),
+        }),
         Command::Sort {
             input,
             output,

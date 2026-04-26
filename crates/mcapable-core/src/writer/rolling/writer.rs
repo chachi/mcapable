@@ -6,9 +6,10 @@ use std::time::{Instant, SystemTime};
 use bytes::Bytes;
 
 use crate::error::{Error, Result};
+use crate::support::HashMap;
 use crate::types::{Channel, Metadata, Payload, RawMessage, Schema};
 use crate::writer::WriterBuilder;
-use crate::writer::api::{ChannelSpec, IntoPayloadBytes};
+use crate::writer::api::{ChannelSpec, ChunkOptions, IntoPayloadBytes};
 use crate::writer::internal::WriterImpl;
 use crate::zero_copy::ByteStr;
 
@@ -33,6 +34,9 @@ pub(crate) struct RollingInner<W: Write + Seek> {
     // Schema/channel registry (stable across splits)
     pub(crate) registered_schemas: Vec<Schema>,
     pub(crate) registered_channels: Vec<Channel>,
+    /// Per-channel override `ChunkOptions`, keyed by stable channel id.
+    /// Re-applied to each fresh `WriterImpl` on split.
+    pub(crate) registered_overrides: HashMap<u16, ChunkOptions>,
 
     // Per-file stats (reset on split)
     pub(crate) file_index: usize,
@@ -130,6 +134,13 @@ impl<W: Write + Seek> RollingInner<W> {
         for channel in &self.registered_channels {
             self.writer_impl.write_channel_internal(channel)?;
         }
+        // Re-register per-channel overrides into the fresh WriterImpl.
+        // Clone because `register_channel_override` takes `ChunkOptions` by
+        // value while the loop borrows `&self.registered_overrides`.
+        for (channel_id, opts) in &self.registered_overrides {
+            self.writer_impl
+                .register_channel_override(*channel_id, opts.clone());
+        }
 
         // Reset per-file stats
         self.file_index = new_file_index;
@@ -161,6 +172,7 @@ impl<W: Write + Seek> RollingInner<W> {
         log_time: u64,
         publish_time: u64,
         data: Bytes,
+        has_chunk_override: bool,
     ) -> Result<()> {
         if self.finished {
             return Err(Error::InvalidRecord(
@@ -173,26 +185,34 @@ impl<W: Write + Seek> RollingInner<W> {
         // the trigger fires on the last message.
         self.maybe_split(log_time)?;
 
-        self.writer_impl.write_raw_message(&RawMessage::new(
+        let msg = RawMessage::new(
             channel_id,
             sequence,
             log_time,
             publish_time,
             Payload::from_bytes(data),
-        ))?;
+        );
+        if has_chunk_override {
+            self.writer_impl.write_raw_message_override(&msg)?;
+        } else {
+            self.writer_impl.write_raw_message_default(&msg)?;
+        }
 
         self.update_stats(log_time);
         Ok(())
     }
 
-    fn add_channel_internal(&mut self, spec: ChannelSpec) -> Result<u16> {
+    fn add_channel_internal(&mut self, spec: ChannelSpec) -> Result<(u16, bool)> {
         if self.finished {
             return Err(Error::InvalidRecord(
                 "cannot add channel to a finished rolling writer".to_string(),
             ));
         }
 
-        let channel_id = self.writer_impl.add_channel_spec(spec)?;
+        // Capture the override before the spec is consumed by add_channel_spec.
+        let override_opts = spec.chunk_override.clone();
+
+        let (channel_id, has_override) = self.writer_impl.add_channel_spec(spec)?;
 
         // Snapshot the schema and channel for re-emission on future splits
         if let Some(channel) = self.writer_impl.channels.get(&channel_id) {
@@ -206,7 +226,11 @@ impl<W: Write + Seek> RollingInner<W> {
             self.registered_channels.push(channel);
         }
 
-        Ok(channel_id)
+        if let Some(opts) = override_opts {
+            self.registered_overrides.insert(channel_id, opts);
+        }
+
+        Ok((channel_id, has_override))
     }
 }
 
@@ -229,11 +253,13 @@ impl<W: Write + Seek> RollingWriter<W> {
     /// The channel will be automatically re-registered in each new file on split.
     /// The returned [`RollingChannelWriter`] remains valid across file splits.
     pub fn add_channel(&mut self, spec: ChannelSpec) -> Result<RollingChannelWriter<W>> {
-        let channel_id = self.inner.borrow_mut().add_channel_internal(spec)?;
+        let (channel_id, has_chunk_override) =
+            self.inner.borrow_mut().add_channel_internal(spec)?;
         Ok(RollingChannelWriter {
             inner: Rc::clone(&self.inner),
             channel_id,
             next_sequence: 0,
+            has_chunk_override,
         })
     }
 
@@ -295,6 +321,7 @@ pub struct RollingChannelWriter<W: Write + Seek> {
     inner: Rc<RefCell<RollingInner<W>>>,
     channel_id: u16,
     next_sequence: u32,
+    has_chunk_override: bool,
 }
 
 impl<W: Write + Seek> RollingChannelWriter<W> {
@@ -338,6 +365,7 @@ impl<W: Write + Seek> RollingChannelWriter<W> {
             log_time,
             publish_time,
             bytes,
+            self.has_chunk_override,
         )
     }
 }
