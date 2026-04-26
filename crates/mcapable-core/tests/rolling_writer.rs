@@ -745,7 +745,7 @@ fn metadata_not_re_emitted_on_split() {
     rolling
         .write_metadata(&Metadata {
             name: ByteStr::from("info"),
-            metadata: std::collections::HashMap::new(),
+            metadata: mcapable_core::collections::HashMap::new(),
         })
         .unwrap();
 
