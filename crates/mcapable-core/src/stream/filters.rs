@@ -8,6 +8,7 @@ use crate::records::try_decode_record_header;
 use crate::support::HashMap;
 use crate::types::{Chunk, ChunkMetadata, Opcode, Timestamp};
 use bytes::Bytes;
+use std::collections::hash_map::Entry;
 use std::io::SeekFrom;
 
 /// Cache schema or channel records during iteration.
@@ -66,8 +67,8 @@ pub(super) fn chunk_might_have_messages_in_range_via_index(
         }
 
         let msg_index = match cache.entry(*message_index_offset) {
-            std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
-            std::collections::hash_map::Entry::Vacant(e) => {
+            Entry::Occupied(e) => e.get().clone(),
+            Entry::Vacant(e) => {
                 let original_pos = match reader.source().stream_position() {
                     Ok(p) => p,
                     Err(_) => return true,

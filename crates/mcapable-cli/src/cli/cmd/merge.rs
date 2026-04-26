@@ -1,4 +1,5 @@
 use mcapable_core::collections::{HashMap, HashSet};
+use std::collections::hash_map::Entry;
 use std::path::PathBuf;
 
 use super::{
@@ -181,7 +182,7 @@ impl ChannelRegistry {
             }
             "none" => {
                 match self.output_channels.entry(original_id) {
-                    std::collections::hash_map::Entry::Occupied(entry) => {
+                    Entry::Occupied(entry) => {
                         if entry.get() != channel {
                             return Err(format!(
                                 "conflicting channel id {} (use --coalesce-channels auto to coalesce)",
@@ -189,7 +190,7 @@ impl ChannelRegistry {
                             ));
                         }
                     }
-                    std::collections::hash_map::Entry::Vacant(entry) => {
+                    Entry::Vacant(entry) => {
                         entry.insert(channel.clone());
                     }
                 }
