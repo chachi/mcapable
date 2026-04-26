@@ -1,7 +1,7 @@
 #[cfg(feature = "std")]
 mod imp {
     pub use std::borrow::Borrow;
-    pub use std::collections::HashMap;
+    pub use std::collections::{HashMap, HashSet};
     pub use std::error;
     pub use std::fmt;
     pub use std::format;
@@ -25,7 +25,7 @@ mod imp {
     pub use core::ops;
     pub use core::result::Result;
     pub use core::str;
-    pub use hashbrown::HashMap;
+    pub use hashbrown::{HashMap, HashSet};
 }
 
 pub use imp::*;
