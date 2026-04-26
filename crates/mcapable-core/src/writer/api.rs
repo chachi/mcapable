@@ -188,7 +188,6 @@ pub struct ChannelWriter<W: Write + Seek> {
     /// True iff this channel has a `chunk_override` registered in
     /// `WriterImpl::override_streams`. Cached so the per-message
     /// write path can dispatch with one bool branch and never hash.
-    #[allow(dead_code)] // Routing wiring lands in Task 4; field is scaffolding only.
     pub(crate) has_chunk_override: bool,
 }
 
@@ -226,13 +225,19 @@ impl<W: Write + Seek> ChannelWriter<W> {
         sequence: u32,
     ) -> Result<()> {
         let bytes = data.into_payload_bytes();
-        self.inner.borrow_mut().write_raw_message(&RawMessage::new(
+        let msg = RawMessage::new(
             self.channel_id,
             sequence,
             log_time,
             publish_time,
             Payload::from_bytes(bytes),
-        ))
+        );
+        let mut inner = self.inner.borrow_mut();
+        if self.has_chunk_override {
+            inner.write_raw_message_override(&msg)
+        } else {
+            inner.write_raw_message_default(&msg)
+        }
     }
 }
 
@@ -293,12 +298,12 @@ impl<W: Write + Seek> Writer<W> {
     /// The channel ID is automatically assigned. Use the returned `ChannelWriter`
     /// to write messages to this channel.
     pub fn add_channel(&mut self, spec: ChannelSpec) -> Result<ChannelWriter<W>> {
-        let channel_id = self.inner.borrow_mut().add_channel_spec(spec)?;
+        let (channel_id, has_chunk_override) = self.inner.borrow_mut().add_channel_spec(spec)?;
         Ok(ChannelWriter {
             inner: Rc::clone(&self.inner),
             channel_id,
             next_sequence: 0,
-            has_chunk_override: false,
+            has_chunk_override,
         })
     }
 

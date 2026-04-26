@@ -173,13 +173,14 @@ impl<W: Write + Seek> RollingInner<W> {
         // the trigger fires on the last message.
         self.maybe_split(log_time)?;
 
-        self.writer_impl.write_raw_message(&RawMessage::new(
-            channel_id,
-            sequence,
-            log_time,
-            publish_time,
-            Payload::from_bytes(data),
-        ))?;
+        self.writer_impl
+            .write_raw_message_default(&RawMessage::new(
+                channel_id,
+                sequence,
+                log_time,
+                publish_time,
+                Payload::from_bytes(data),
+            ))?;
 
         self.update_stats(log_time);
         Ok(())
@@ -192,7 +193,14 @@ impl<W: Write + Seek> RollingInner<W> {
             ));
         }
 
-        let channel_id = self.writer_impl.add_channel_spec(spec)?;
+        if spec.chunk_override.is_some() {
+            return Err(Error::InvalidRecord(
+                "rolling writer does not yet support ChannelSpec::chunk_override; \
+                 use Writer::add_channel for per-channel uncompressed chunks"
+                    .to_string(),
+            ));
+        }
+        let (channel_id, _has_override) = self.writer_impl.add_channel_spec(spec)?;
 
         // Snapshot the schema and channel for re-emission on future splits
         if let Some(channel) = self.writer_impl.channels.get(&channel_id) {

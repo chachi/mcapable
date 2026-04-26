@@ -33,7 +33,6 @@ pub(crate) struct WriterImpl<W: Write + Seek> {
     /// `Some(state)` means this channel has a `chunk_override` registered;
     /// its messages flow into `state` instead of `chunk_state`. The vec
     /// grows as channels are registered (mirrors `channel_stats`).
-    #[allow(dead_code)] // Populated by add_channel_spec in Task 4.
     pub(crate) override_streams: Vec<Option<ChunkState>>,
     pub(crate) schemas: HashMap<u16, Schema>,
     pub(crate) channels: HashMap<u16, Channel>,
@@ -112,6 +111,47 @@ impl<W: Write + Seek> WriterImpl<W> {
         }
 
         state.recycle_buffers(flush.message_prefixes, flush.payloads);
+        Ok(())
+    }
+
+    fn flush_override_if_needed(&mut self, channel_idx: usize, force: bool) -> Result<()> {
+        let Some(state) = self
+            .override_streams
+            .get_mut(channel_idx)
+            .and_then(|slot| slot.as_mut())
+        else {
+            return Ok(());
+        };
+        if !state.should_flush(force) {
+            return Ok(());
+        }
+
+        let flush = state.take_for_flush();
+        let sink_position = self.sink.position();
+        let prepared = prepare_chunk_for_write(sink_position, &flush)?;
+        self.chunk_indexes.push(prepared.index);
+
+        write_all_vectored2(
+            &mut self.sink,
+            &prepared.record_header,
+            &prepared.record_prefix,
+        )?;
+        if prepared.write_uncompressed_records {
+            write_all_vectored_chunk_records(
+                &mut self.sink,
+                &flush.message_prefixes,
+                &flush.payloads,
+                MESSAGE_RECORD_PREFIX_LEN,
+            )?;
+        } else if let Some(compressed) = prepared.compressed_body {
+            self.sink.write_all(&compressed)?;
+        }
+
+        if let Some(slot) = self.override_streams.get_mut(channel_idx)
+            && let Some(state) = slot.as_mut()
+        {
+            state.recycle_buffers(flush.message_prefixes, flush.payloads);
+        }
         Ok(())
     }
 
@@ -246,7 +286,7 @@ impl<W: Write + Seek> WriterImpl<W> {
         Ok(id)
     }
 
-    pub(crate) fn add_channel_spec(&mut self, spec: ChannelSpec) -> Result<u16> {
+    pub(crate) fn add_channel_spec(&mut self, spec: ChannelSpec) -> Result<(u16, bool)> {
         let schema_id = match spec.schema {
             Some(schema) => self.schema_id_for_spec(schema)?,
             None => 0,
@@ -261,7 +301,20 @@ impl<W: Write + Seek> WriterImpl<W> {
             metadata: spec.metadata,
         };
         self.write_channel_internal(&channel)?;
-        Ok(id)
+
+        let has_override = if let Some(opts) = spec.chunk_override {
+            let idx = id as usize;
+            if self.override_streams.len() <= idx {
+                self.override_streams
+                    .resize_with(idx.saturating_add(1), || None);
+            }
+            self.override_streams[idx] = Some(ChunkState::new(opts));
+            true
+        } else {
+            false
+        };
+
+        Ok((id, has_override))
     }
 
     pub(crate) fn write_attachment_internal(
@@ -746,7 +799,7 @@ impl<W: Write + Seek> WriterImpl<W> {
         Ok(())
     }
 
-    pub(crate) fn write_raw_message(&mut self, message: &RawMessage) -> Result<()> {
+    pub(crate) fn write_raw_message_default(&mut self, message: &RawMessage) -> Result<()> {
         if self.finished {
             return Err(Error::InvalidRecord(
                 "cannot write message after finish".to_string(),
@@ -777,6 +830,39 @@ impl<W: Write + Seek> WriterImpl<W> {
         prefix[23..31].copy_from_slice(&message.publish_time.to_le_bytes());
 
         write_all_vectored2(&mut self.sink, &prefix, message.data())?;
+        Ok(())
+    }
+
+    pub(crate) fn write_raw_message_override(&mut self, message: &RawMessage) -> Result<()> {
+        if self.finished {
+            return Err(Error::InvalidRecord(
+                "cannot write message after finish".to_string(),
+            ));
+        }
+        self.write_header()?;
+        self.update_channel_stats(message.channel_id, message.log_time);
+
+        let idx = message.channel_id as usize;
+        debug_assert!(
+            idx < self.override_streams.len() && self.override_streams[idx].is_some(),
+            "write_raw_message_override called for channel {} without registered override stream",
+            message.channel_id,
+        );
+
+        {
+            let state = self.override_streams[idx]
+                .as_mut()
+                .expect("override stream must be registered");
+            state.push_message(
+                message.channel_id,
+                message.sequence,
+                message.log_time,
+                message.publish_time,
+                message.data_bytes(),
+            );
+        }
+
+        self.flush_override_if_needed(idx, false)?;
         Ok(())
     }
 
@@ -992,6 +1078,9 @@ impl<W: Write + Seek> WriterImpl<W> {
             return Ok(());
         }
         self.write_header()?;
+        for idx in 0..self.override_streams.len() {
+            self.flush_override_if_needed(idx, true)?;
+        }
         self.flush_chunk_if_needed(true)?;
 
         let data_end = encode::encode_data_end(0);
