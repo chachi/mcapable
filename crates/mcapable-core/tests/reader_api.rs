@@ -1,10 +1,10 @@
 //! Tests for Reader API methods that lack coverage.
 
 use bytes::Bytes;
+use mcapable_core::collections::HashMap;
 use mcapable_core::writer::{ChunkOptions, WriterBuilder};
 use mcapable_core::zero_copy::ByteStr;
 use mcapable_core::{Channel, Schema};
-use std::collections::HashMap;
 use std::io::Cursor;
 
 /// Build a fixture MCAP with schema, channel, messages, attachment, and metadata.

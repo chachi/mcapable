@@ -1,9 +1,9 @@
 use bytes::Bytes;
 use mcapable_core::Compression;
+use mcapable_core::collections::HashMap;
 use mcapable_core::writer::{ChannelSpec, ChunkOptions, SchemaSpec, WriterBuilder};
 use mcapable_core::zero_copy::ByteStr;
 use mcapable_core::{Channel, Schema};
-use std::collections::HashMap;
 use std::io::Cursor;
 
 fn assert_footer_and_summary(bytes: &[u8], expected_chunk_indexes: usize) {

@@ -192,7 +192,7 @@ proptest! {
 
         let mut expected: Vec<(u16, u32, Vec<u8>)> = Vec::new();
         let mut t = 1000u64;
-        use std::collections::HashMap;
+        use mcapable_core::collections::HashMap;
         let mut next_seq: HashMap<u16, u32> = HashMap::new();
         for (tag, data) in &msgs {
             t += 1;

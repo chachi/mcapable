@@ -646,7 +646,7 @@ fn write_metadata_to_current_file() {
         .build()
         .unwrap();
 
-    let mut meta_map = std::collections::HashMap::new();
+    let mut meta_map = mcapable_core::collections::HashMap::new();
     meta_map.insert(ByteStr::from("version"), ByteStr::from("1.0"));
     rolling
         .write_metadata(&Metadata {
