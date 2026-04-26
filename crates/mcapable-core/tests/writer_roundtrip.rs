@@ -671,21 +671,23 @@ fn write_mixed_compression_file(
     (bytes, default_msgs, override_msgs)
 }
 
-#[test]
-fn writer_round_trip_mixed_compression_zstd_default_uncompressed_override() {
-    let (bytes, default_msgs, override_msgs) =
-        write_mixed_compression_file(Some(Compression::Zstd), None);
-
+fn assert_mixed_round_trip_messages(
+    bytes: Vec<u8>,
+    default_msgs: Vec<Bytes>,
+    override_msgs: Vec<Bytes>,
+) {
     let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
 
-    // Collect (channel_id, data) pairs; metadata is loaded during iteration.
+    // Channels populate lazily only during raw_messages() consumption, so we
+    // can't pre-cache them before opening the stream. Collect (channel_id, data)
+    // pairs first, drop the stream, then resolve topics from the now-populated
+    // channel map.
     let mut got: Vec<(u16, Bytes)> = Vec::new();
     for raw in reader.raw_messages().unwrap() {
         let raw = raw.unwrap();
         got.push((raw.channel_id, raw.data_bytes()));
     }
 
-    // Now that the stream is done, channels are cached and can be queried.
     let channels = reader.channels();
     let topic_for = |id: u16| channels.get(&id).map(|c| c.topic.as_ref().to_string());
 
@@ -703,34 +705,17 @@ fn writer_round_trip_mixed_compression_zstd_default_uncompressed_override() {
 }
 
 #[test]
+fn writer_round_trip_mixed_compression_zstd_default_uncompressed_override() {
+    let (bytes, default_msgs, override_msgs) =
+        write_mixed_compression_file(Some(Compression::Zstd), None);
+    assert_mixed_round_trip_messages(bytes, default_msgs, override_msgs);
+}
+
+#[test]
 fn writer_round_trip_mixed_compression_lz4_default_uncompressed_override() {
     let (bytes, default_msgs, override_msgs) =
         write_mixed_compression_file(Some(Compression::Lz4), None);
-
-    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
-
-    // Collect (channel_id, data) pairs; metadata is loaded during iteration.
-    let mut got: Vec<(u16, Bytes)> = Vec::new();
-    for raw in reader.raw_messages().unwrap() {
-        let raw = raw.unwrap();
-        got.push((raw.channel_id, raw.data_bytes()));
-    }
-
-    // Now that the stream is done, channels are cached and can be queried.
-    let channels = reader.channels();
-    let topic_for = |id: u16| channels.get(&id).map(|c| c.topic.as_ref().to_string());
-
-    let mut got_telemetry: Vec<Bytes> = Vec::new();
-    let mut got_video: Vec<Bytes> = Vec::new();
-    for (ch_id, data) in got {
-        match topic_for(ch_id).as_deref() {
-            Some("/telemetry") => got_telemetry.push(data),
-            Some("/video") => got_video.push(data),
-            other => panic!("unexpected topic: {other:?}"),
-        }
-    }
-    assert_eq!(got_telemetry, default_msgs);
-    assert_eq!(got_video, override_msgs);
+    assert_mixed_round_trip_messages(bytes, default_msgs, override_msgs);
 }
 
 #[test]
