@@ -19,11 +19,13 @@ pub fn dispatch(command: AddCommand) -> Result<(), String> {
         } => run_attachment(
             input,
             output,
-            file,
-            name,
-            content_type,
-            log_time,
-            creation_time,
+            AttachmentArgs {
+                file,
+                name,
+                content_type,
+                log_time,
+                creation_time,
+            },
             output_options,
         ),
         AddCommand::Metadata {
@@ -36,17 +38,28 @@ pub fn dispatch(command: AddCommand) -> Result<(), String> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_attachment(
-    input: Option<String>,
-    output: Option<String>,
+struct AttachmentArgs {
     file: PathBuf,
     name: Option<String>,
     content_type: String,
     log_time: Option<String>,
     creation_time: Option<String>,
+}
+
+fn run_attachment(
+    input: Option<String>,
+    output: Option<String>,
+    args: AttachmentArgs,
     output_options: OutputOptions,
 ) -> Result<(), String> {
+    let AttachmentArgs {
+        file,
+        name,
+        content_type,
+        log_time,
+        creation_time,
+    } = args;
+
     let input = input.ok_or_else(|| "input file required".to_string())?;
     let output = PathBuf::from(output.ok_or_else(|| "output file required".to_string())?);
     let chunk_options = output_options.to_chunk_options()?;

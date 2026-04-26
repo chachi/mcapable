@@ -4,6 +4,8 @@
 //! directly, then verify output files with mcapable-core's reader.
 
 use bytes::Bytes;
+use mcapable_cli::cli::cmd::cat::CatOptions;
+use mcapable_cli::cli::cmd::filter::FilterOptions;
 use mcapable_core::writer::{ChunkOptions, WriterBuilder};
 use mcapable_core::zero_copy::ByteStr;
 use mcapable_core::{Channel, Schema};
@@ -396,28 +398,28 @@ fn filter_by_time_range() {
         .unwrap()
         .to_string();
 
-    mcapable_cli::cli::cmd::filter::run(
-        Some(input),
-        Some(output.clone()),
-        vec![],                  // topics
-        Some("200".to_string()), // start
-        Some("300".to_string()), // end
-        None,
-        None,
-        None,
-        None, // secs/nsecs
-        vec![],
-        vec![],
-        vec![], // regexes
-        true,
-        true, // include metadata/attachments
-        mcapable_cli::cli::cmd::OutputOptions {
+    mcapable_cli::cli::cmd::filter::run(FilterOptions {
+        input: Some(input),
+        output: Some(output.clone()),
+        topics: vec![],
+        start: Some("200".to_string()),
+        end: Some("300".to_string()),
+        start_secs: None,
+        start_nsecs: None,
+        end_secs: None,
+        end_nsecs: None,
+        include_topic_regex: vec![],
+        exclude_topic_regex: vec![],
+        last_per_channel_topic_regex: vec![],
+        include_metadata: true,
+        include_attachments: true,
+        output_options: mcapable_cli::cli::cmd::OutputOptions {
             compression: "none".to_string(),
             chunk_size: 4_194_304,
             chunked: true,
             include_crc: true,
         },
-    )
+    })
     .unwrap();
 
     let msgs = read_messages(&output);
@@ -443,28 +445,28 @@ fn filter_include_topic_regex() {
         .unwrap()
         .to_string();
 
-    mcapable_cli::cli::cmd::filter::run(
-        Some(input),
-        Some(output.clone()),
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        vec!["/sensor.*".to_string()], // include regex
-        vec![],
-        vec![],
-        true,
-        true,
-        mcapable_cli::cli::cmd::OutputOptions {
+    mcapable_cli::cli::cmd::filter::run(FilterOptions {
+        input: Some(input),
+        output: Some(output.clone()),
+        topics: vec![],
+        start: None,
+        end: None,
+        start_secs: None,
+        start_nsecs: None,
+        end_secs: None,
+        end_nsecs: None,
+        include_topic_regex: vec!["/sensor.*".to_string()],
+        exclude_topic_regex: vec![],
+        last_per_channel_topic_regex: vec![],
+        include_metadata: true,
+        include_attachments: true,
+        output_options: mcapable_cli::cli::cmd::OutputOptions {
             compression: "none".to_string(),
             chunk_size: 4_194_304,
             chunked: true,
             include_crc: true,
         },
-    )
+    })
     .unwrap();
 
     let msgs = read_messages(&output);
@@ -489,28 +491,28 @@ fn filter_exclude_topic_regex() {
         .unwrap()
         .to_string();
 
-    mcapable_cli::cli::cmd::filter::run(
-        Some(input),
-        Some(output.clone()),
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        vec![],
-        vec!["/debug.*".to_string()], // exclude regex
-        vec![],
-        true,
-        true,
-        mcapable_cli::cli::cmd::OutputOptions {
+    mcapable_cli::cli::cmd::filter::run(FilterOptions {
+        input: Some(input),
+        output: Some(output.clone()),
+        topics: vec![],
+        start: None,
+        end: None,
+        start_secs: None,
+        start_nsecs: None,
+        end_secs: None,
+        end_nsecs: None,
+        include_topic_regex: vec![],
+        exclude_topic_regex: vec!["/debug.*".to_string()],
+        last_per_channel_topic_regex: vec![],
+        include_metadata: true,
+        include_attachments: true,
+        output_options: mcapable_cli::cli::cmd::OutputOptions {
             compression: "none".to_string(),
             chunk_size: 4_194_304,
             chunked: true,
             include_crc: true,
         },
-    )
+    })
     .unwrap();
 
     let msgs = read_messages(&output);
@@ -529,28 +531,28 @@ fn filter_topics_and_regex_together_errors() {
         .unwrap()
         .to_string();
 
-    let result = mcapable_cli::cli::cmd::filter::run(
-        Some(input),
-        Some(output),
-        vec!["/test".to_string()], // topics
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        vec!["/test".to_string()], // include regex - conflict!
-        vec![],
-        vec![],
-        true,
-        true,
-        mcapable_cli::cli::cmd::OutputOptions {
+    let result = mcapable_cli::cli::cmd::filter::run(FilterOptions {
+        input: Some(input),
+        output: Some(output),
+        topics: vec!["/test".to_string()],
+        start: None,
+        end: None,
+        start_secs: None,
+        start_nsecs: None,
+        end_secs: None,
+        end_nsecs: None,
+        include_topic_regex: vec!["/test".to_string()],
+        exclude_topic_regex: vec![],
+        last_per_channel_topic_regex: vec![],
+        include_metadata: true,
+        include_attachments: true,
+        output_options: mcapable_cli::cli::cmd::OutputOptions {
             compression: "none".to_string(),
             chunk_size: 4_194_304,
             chunked: true,
             include_crc: true,
         },
-    );
+    });
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("cannot use both"));
 }
@@ -566,28 +568,28 @@ fn filter_include_metadata_false_strips_metadata() {
         .unwrap()
         .to_string();
 
-    mcapable_cli::cli::cmd::filter::run(
-        Some(input),
-        Some(output.clone()),
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        vec![],
-        vec![],
-        vec![],
-        false, // include_metadata = false
-        true,
-        mcapable_cli::cli::cmd::OutputOptions {
+    mcapable_cli::cli::cmd::filter::run(FilterOptions {
+        input: Some(input),
+        output: Some(output.clone()),
+        topics: vec![],
+        start: None,
+        end: None,
+        start_secs: None,
+        start_nsecs: None,
+        end_secs: None,
+        end_nsecs: None,
+        include_topic_regex: vec![],
+        exclude_topic_regex: vec![],
+        last_per_channel_topic_regex: vec![],
+        include_metadata: false,
+        include_attachments: true,
+        output_options: mcapable_cli::cli::cmd::OutputOptions {
             compression: "none".to_string(),
             chunk_size: 4_194_304,
             chunked: true,
             include_crc: true,
         },
-    )
+    })
     .unwrap();
 
     let names = read_metadata_names(&output);
@@ -605,28 +607,28 @@ fn filter_include_attachments_false_strips_attachments() {
         .unwrap()
         .to_string();
 
-    mcapable_cli::cli::cmd::filter::run(
-        Some(input),
-        Some(output.clone()),
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        vec![],
-        vec![],
-        vec![],
-        true,
-        false, // include_attachments = false
-        mcapable_cli::cli::cmd::OutputOptions {
+    mcapable_cli::cli::cmd::filter::run(FilterOptions {
+        input: Some(input),
+        output: Some(output.clone()),
+        topics: vec![],
+        start: None,
+        end: None,
+        start_secs: None,
+        start_nsecs: None,
+        end_secs: None,
+        end_nsecs: None,
+        include_topic_regex: vec![],
+        exclude_topic_regex: vec![],
+        last_per_channel_topic_regex: vec![],
+        include_metadata: true,
+        include_attachments: false,
+        output_options: mcapable_cli::cli::cmd::OutputOptions {
             compression: "none".to_string(),
             chunk_size: 4_194_304,
             chunked: true,
             include_crc: true,
         },
-    )
+    })
     .unwrap();
 
     let att = read_attachment_data(&output, "test.bin");
@@ -919,28 +921,28 @@ fn filter_include_crc_false_produces_zero_crc() {
         .unwrap()
         .to_string();
 
-    mcapable_cli::cli::cmd::filter::run(
-        Some(input),
-        Some(output.clone()),
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        vec![],
-        vec![],
-        vec![],
-        true,
-        true,
-        mcapable_cli::cli::cmd::OutputOptions {
+    mcapable_cli::cli::cmd::filter::run(FilterOptions {
+        input: Some(input),
+        output: Some(output.clone()),
+        topics: vec![],
+        start: None,
+        end: None,
+        start_secs: None,
+        start_nsecs: None,
+        end_secs: None,
+        end_nsecs: None,
+        include_topic_regex: vec![],
+        exclude_topic_regex: vec![],
+        last_per_channel_topic_regex: vec![],
+        include_metadata: true,
+        include_attachments: true,
+        output_options: mcapable_cli::cli::cmd::OutputOptions {
             compression: "none".to_string(),
             chunk_size: 4_194_304,
             chunked: true,
             include_crc: false,
         },
-    )
+    })
     .unwrap();
 
     // Read chunks and verify CRC is 0
@@ -1001,15 +1003,17 @@ fn cat_json_produces_valid_jsonl() {
     let input = path.to_str().unwrap().to_string();
     let mut buf = Vec::new();
     mcapable_cli::cli::cmd::cat::run_with_output(
-        Some(input),
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        true, // json
+        CatOptions {
+            input: Some(input),
+            topics: vec![],
+            start: None,
+            end: None,
+            start_secs: None,
+            start_nsecs: None,
+            end_secs: None,
+            end_nsecs: None,
+            json: true,
+        },
         &mut buf,
     )
     .unwrap();
@@ -1065,15 +1069,17 @@ fn cat_json_unknown_encoding_produces_null_data() {
     let input = path.to_str().unwrap().to_string();
     let mut buf = Vec::new();
     mcapable_cli::cli::cmd::cat::run_with_output(
-        Some(input),
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        true,
+        CatOptions {
+            input: Some(input),
+            topics: vec![],
+            start: None,
+            end: None,
+            start_secs: None,
+            start_nsecs: None,
+            end_secs: None,
+            end_nsecs: None,
+            json: true,
+        },
         &mut buf,
     )
     .unwrap();
@@ -1094,15 +1100,17 @@ fn cat_text_mode_outputs_topic_and_timestamps() {
 
     let mut buf = Vec::new();
     mcapable_cli::cli::cmd::cat::run_with_output(
-        Some(input),
-        vec![],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        false, // text mode
+        CatOptions {
+            input: Some(input),
+            topics: vec![],
+            start: None,
+            end: None,
+            start_secs: None,
+            start_nsecs: None,
+            end_secs: None,
+            end_nsecs: None,
+            json: false,
+        },
         &mut buf,
     )
     .unwrap();
@@ -1309,28 +1317,28 @@ fn filter_last_per_channel_topic_regex() {
         .unwrap()
         .to_string();
 
-    mcapable_cli::cli::cmd::filter::run(
-        Some(input),
-        Some(output.clone()),
-        vec![],
-        Some("300".to_string()), // start
-        None,                    // no end
-        None,
-        None,
-        None,
-        None,
-        vec![],
-        vec![],
-        vec!["/test".to_string()], // last-per-channel for /test
-        true,
-        true,
-        mcapable_cli::cli::cmd::OutputOptions {
+    mcapable_cli::cli::cmd::filter::run(FilterOptions {
+        input: Some(input),
+        output: Some(output.clone()),
+        topics: vec![],
+        start: Some("300".to_string()),
+        end: None,
+        start_secs: None,
+        start_nsecs: None,
+        end_secs: None,
+        end_nsecs: None,
+        include_topic_regex: vec![],
+        exclude_topic_regex: vec![],
+        last_per_channel_topic_regex: vec!["/test".to_string()],
+        include_metadata: true,
+        include_attachments: true,
+        output_options: mcapable_cli::cli::cmd::OutputOptions {
             compression: "none".to_string(),
             chunk_size: 4_194_304,
             chunked: true,
             include_crc: true,
         },
-    )
+    })
     .unwrap();
 
     let msgs = read_messages(&output);

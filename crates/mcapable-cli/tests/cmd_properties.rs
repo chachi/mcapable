@@ -3,6 +3,7 @@
 //! These tests verify invariants across randomized inputs using proptest.
 
 use bytes::Bytes;
+use mcapable_cli::cli::cmd::filter::FilterOptions;
 use mcapable_core::writer::{ChunkOptions, WriterBuilder};
 use mcapable_core::zero_copy::ByteStr;
 use mcapable_core::{Channel, Schema};
@@ -145,17 +146,23 @@ proptest! {
         let input = write_mcap_with_messages(&dir, "input.mcap", &times);
         let output = dir.path().join("filtered.mcap").to_str().unwrap().to_string();
 
-        mcapable_cli::cli::cmd::filter::run(
-            Some(input),
-            Some(output.clone()),
-            vec![],
-            Some(start.to_string()),
-            Some(end.to_string()),
-            None, None, None, None,
-            vec![], vec![], vec![],
-            true, true,
-            default_output_options(),
-        )
+        mcapable_cli::cli::cmd::filter::run(FilterOptions {
+            input: Some(input),
+            output: Some(output.clone()),
+            topics: vec![],
+            start: Some(start.to_string()),
+            end: Some(end.to_string()),
+            start_secs: None,
+            start_nsecs: None,
+            end_secs: None,
+            end_nsecs: None,
+            include_topic_regex: vec![],
+            exclude_topic_regex: vec![],
+            last_per_channel_topic_regex: vec![],
+            include_metadata: true,
+            include_attachments: true,
+            output_options: default_output_options(),
+        })
         .unwrap();
 
         let result = read_log_times(&output);

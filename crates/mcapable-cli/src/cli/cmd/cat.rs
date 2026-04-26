@@ -3,20 +3,25 @@ use std::io::Write;
 
 use super::{open_reader, parse_topics, preload_schemas_and_channels, resolve_time, CliResult};
 
-#[allow(clippy::too_many_arguments)]
-pub fn run(
-    input: Option<String>,
-    topics: Vec<String>,
-    start: Option<String>,
-    end: Option<String>,
-    start_secs: Option<u64>,
-    start_nsecs: Option<u32>,
-    end_secs: Option<u64>,
-    end_nsecs: Option<u32>,
-    json: bool,
-) -> Result<(), String> {
+pub struct CatOptions {
+    pub input: Option<String>,
+    pub topics: Vec<String>,
+    pub start: Option<String>,
+    pub end: Option<String>,
+    pub start_secs: Option<u64>,
+    pub start_nsecs: Option<u32>,
+    pub end_secs: Option<u64>,
+    pub end_nsecs: Option<u32>,
+    pub json: bool,
+}
+
+pub fn run(opts: CatOptions) -> Result<(), String> {
     let mut stdout = std::io::stdout().lock();
-    run_with_output(
+    run_with_output(opts, &mut stdout)
+}
+
+pub fn run_with_output<W: Write>(opts: CatOptions, out: &mut W) -> Result<(), String> {
+    let CatOptions {
         input,
         topics,
         start,
@@ -26,23 +31,8 @@ pub fn run(
         end_secs,
         end_nsecs,
         json,
-        &mut stdout,
-    )
-}
+    } = opts;
 
-#[allow(clippy::too_many_arguments)]
-pub fn run_with_output<W: Write>(
-    input: Option<String>,
-    topics: Vec<String>,
-    start: Option<String>,
-    end: Option<String>,
-    start_secs: Option<u64>,
-    start_nsecs: Option<u32>,
-    end_secs: Option<u64>,
-    end_nsecs: Option<u32>,
-    json: bool,
-    out: &mut W,
-) -> Result<(), String> {
     let start_time = resolve_time(start, start_secs, start_nsecs)?;
     let end_time = resolve_time(end, end_secs, end_nsecs)?;
 
