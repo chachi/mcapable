@@ -1,23 +1,20 @@
 use std::collections::HashMap;
 use std::io::Write;
 
-use super::{format_bytes, open_reader};
+use super::{format_bytes, open_reader, CliResult};
 
-pub(crate) fn run(input: Option<String>) -> Result<(), String> {
+pub fn run(input: Option<String>) -> Result<(), String> {
     let mut stdout = std::io::stdout().lock();
     run_with_output(input, &mut stdout)
 }
 
-pub(crate) fn run_with_output<W: Write>(
-    input: Option<String>,
-    stdout: &mut W,
-) -> Result<(), String> {
+pub fn run_with_output<W: Write>(input: Option<String>, stdout: &mut W) -> Result<(), String> {
     let mut reader = open_reader(input.unwrap_or_else(|| "-".to_string()))?;
 
-    let header = reader.header().map_err(|e| e.to_string())?;
+    let header = reader.header().cli()?;
     let summary = reader
         .summary()
-        .map_err(|e| e.to_string())?
+        .cli()?
         .ok_or_else(|| "missing summary section (try `mcapable reindex`)".to_string())?;
 
     let schemas = summary.schemas.clone();
@@ -53,7 +50,7 @@ pub(crate) fn run_with_output<W: Write>(
         &format_time_with_epoch(message_summary.end_ns),
     )?;
 
-    writeln!(stdout, "compression:").map_err(|e| e.to_string())?;
+    writeln!(stdout, "compression:").cli()?;
     for (compression, stats) in compression_stats {
         println_fixed(
             stdout,
@@ -75,27 +72,27 @@ pub(crate) fn run_with_output<W: Write>(
         )?;
     }
 
-    writeln!(stdout, "chunks:").map_err(|e| e.to_string())?;
+    writeln!(stdout, "chunks:").cli()?;
     writeln!(
         stdout,
         "\tmax uncompressed size: {}",
         format_bytes(chunk_stats.max_uncompressed)
     )
-    .map_err(|e| e.to_string())?;
+    .cli()?;
     writeln!(
         stdout,
         "\tmax compressed size: {}",
         format_bytes(chunk_stats.max_compressed)
     )
-    .map_err(|e| e.to_string())?;
+    .cli()?;
     writeln!(
         stdout,
         "\toverlaps: {}",
         if chunk_stats.overlaps { "yes" } else { "no" }
     )
-    .map_err(|e| e.to_string())?;
+    .cli()?;
 
-    writeln!(stdout, "channels:").map_err(|e| e.to_string())?;
+    writeln!(stdout, "channels:").cli()?;
     print_channels(
         stdout,
         &channels,
@@ -105,7 +102,7 @@ pub(crate) fn run_with_output<W: Write>(
         message_summary.end_ns,
     )?;
 
-    writeln!(stdout, "channels: {}", channels.len()).map_err(|e| e.to_string())?;
+    writeln!(stdout, "channels: {}", channels.len()).cli()?;
     let (attachment_count, metadata_count) = if let Some(stats) = summary.statistics.as_deref() {
         (stats.attachment_count, stats.metadata_count)
     } else {
@@ -114,8 +111,8 @@ pub(crate) fn run_with_output<W: Write>(
             summary.metadata_indexes.len() as u32,
         )
     };
-    writeln!(stdout, "attachments: {attachment_count}").map_err(|e| e.to_string())?;
-    writeln!(stdout, "metadata: {metadata_count}").map_err(|e| e.to_string())?;
+    writeln!(stdout, "attachments: {attachment_count}").cli()?;
+    writeln!(stdout, "metadata: {metadata_count}").cli()?;
 
     Ok(())
 }
@@ -127,7 +124,7 @@ fn print_field_padded<W: Write>(stdout: &mut W, label: &str, value: &str) -> Res
 }
 
 fn println_fixed<W: Write>(stdout: &mut W, width: usize, s: &str) -> Result<(), String> {
-    writeln!(stdout, "{}", pad_to_width(width, s)).map_err(|e| e.to_string())
+    writeln!(stdout, "{}", pad_to_width(width, s)).cli()
 }
 
 fn pad_to_width(width: usize, s: &str) -> String {
@@ -246,7 +243,7 @@ fn summarize_messages_from_summary(
 }
 
 fn chunk_compressed_size_from_index(ci: &mcapable_core::ChunkIndex) -> Result<u64, String> {
-    ci.compressed_size().map_err(|e| e.to_string())
+    ci.compressed_size().cli()
 }
 
 fn gather_chunk_stats_from_summary(

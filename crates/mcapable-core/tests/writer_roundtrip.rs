@@ -135,6 +135,7 @@ fn writer_round_trip_chunked_none() {
     let bytes = write_basic_file(Some(ChunkOptions {
         compression: None,
         max_uncompressed_bytes: 1,
+        include_crc: true,
     }));
     let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
     let mut got = Vec::new();
@@ -153,6 +154,7 @@ fn writer_round_trip_chunked_lz4() {
     let bytes = write_basic_file(Some(ChunkOptions {
         compression: Some(Compression::Lz4),
         max_uncompressed_bytes: 1,
+        include_crc: true,
     }));
     let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
     let mut got = Vec::new();
@@ -171,6 +173,7 @@ fn writer_round_trip_chunked_zstd() {
     let bytes = write_basic_file(Some(ChunkOptions {
         compression: Some(Compression::Zstd),
         max_uncompressed_bytes: 1,
+        include_crc: true,
     }));
     let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
     let mut got = Vec::new();
@@ -182,6 +185,23 @@ fn writer_round_trip_chunked_zstd() {
     assert_eq!(got[0].as_ref(), b"abc");
 
     assert_footer_and_summary(&bytes, 1);
+}
+
+#[test]
+fn writer_round_trip_chunked_no_crc() {
+    let bytes = write_basic_file(Some(ChunkOptions {
+        compression: None,
+        max_uncompressed_bytes: 1,
+        include_crc: false,
+    }));
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+    let mut got = Vec::new();
+    for raw in reader.raw_messages().unwrap() {
+        let raw = raw.unwrap();
+        got.push(raw.data_bytes());
+    }
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].as_ref(), b"abc");
 }
 
 #[test]
@@ -313,4 +333,286 @@ fn writer_attachment_round_trip() {
     assert_eq!(att.name, ByteStr::from("calib.json"));
     assert_eq!(att.media_type, ByteStr::from("application/json"));
     assert_eq!(att.data.as_ref(), br#"{"k":"v"}"#);
+}
+
+#[test]
+fn writer_copy_record_round_trip() {
+    // Write a source file with schema, channel, message, attachment, metadata
+    let source_bytes = {
+        let out = Cursor::new(Vec::new());
+        let mut writer = WriterBuilder::new()
+            .profile("test")
+            .chunked(ChunkOptions::default())
+            .build(out)
+            .unwrap();
+
+        let schema = Schema {
+            id: 1,
+            name: ByteStr::from("pkg/Msg"),
+            encoding: ByteStr::from("jsonschema"),
+            data: Bytes::from_static(br#"{"type":"object"}"#),
+        };
+        writer.copy_schema(&schema).unwrap();
+
+        let channel = Channel {
+            id: 1,
+            topic: ByteStr::from("/test"),
+            message_encoding: ByteStr::from("json"),
+            schema_id: 1,
+            metadata: HashMap::new(),
+        };
+        let mut cw = writer.copy_channel(&channel).unwrap();
+        cw.write(100, 200, Bytes::from_static(b"hello")).unwrap();
+        drop(cw);
+
+        writer
+            .copy_attachment(
+                300,
+                400,
+                ByteStr::from("file.bin"),
+                ByteStr::from("application/octet-stream"),
+                Bytes::from_static(b"attachment-data"),
+            )
+            .unwrap();
+
+        let md = mcapable_core::types::Metadata {
+            name: ByteStr::from("build"),
+            metadata: {
+                let mut m = HashMap::new();
+                m.insert(ByteStr::from("version"), ByteStr::from("1.0"));
+                m
+            },
+        };
+        writer.copy_metadata(&md).unwrap();
+        writer.finish().unwrap();
+        writer.into_inner().into_inner()
+    };
+
+    // Read all records and copy them to a new writer via copy_record
+    let mut source_reader = mcapable_core::reader::Reader::from_slice(&source_bytes).unwrap();
+
+    let out = Cursor::new(Vec::new());
+    let mut dest_writer = WriterBuilder::new().profile("test").build(out).unwrap();
+
+    for record in source_reader.records() {
+        let record = record.unwrap();
+        dest_writer.copy_record(&record).unwrap();
+    }
+    dest_writer.finish().unwrap();
+    let dest_bytes = dest_writer.into_inner().into_inner();
+
+    // Verify the destination file has the same data
+    let mut dest_reader = mcapable_core::reader::Reader::from_slice(&dest_bytes).unwrap();
+    let mut msg_count = 0;
+    for msg in dest_reader.raw_messages().unwrap() {
+        let msg = msg.unwrap();
+        assert_eq!(msg.data_bytes().as_ref(), b"hello");
+        msg_count += 1;
+    }
+    assert_eq!(msg_count, 1);
+
+    // Verify attachment was copied
+    let mut found_attachment = false;
+    let mut found_metadata = false;
+    for rec in dest_reader.records() {
+        match rec.unwrap() {
+            mcapable_core::Record::Attachment(att) => {
+                assert_eq!(att.name, ByteStr::from("file.bin"));
+                assert_eq!(att.data.as_ref(), b"attachment-data");
+                found_attachment = true;
+            }
+            mcapable_core::Record::Metadata(md) => {
+                assert_eq!(md.name, ByteStr::from("build"));
+                found_metadata = true;
+            }
+            _ => {}
+        }
+    }
+    assert!(found_attachment, "attachment should be copied");
+    assert!(found_metadata, "metadata should be copied");
+}
+
+#[test]
+fn writer_copy_metadata_round_trip() {
+    let out = Cursor::new(Vec::new());
+    let mut writer = WriterBuilder::new().build(out).unwrap();
+
+    let md = mcapable_core::types::Metadata {
+        name: ByteStr::from("config"),
+        metadata: {
+            let mut m = HashMap::new();
+            m.insert(ByteStr::from("key1"), ByteStr::from("val1"));
+            m.insert(ByteStr::from("key2"), ByteStr::from("val2"));
+            m
+        },
+    };
+    writer.copy_metadata(&md).unwrap();
+    writer.finish().unwrap();
+
+    let bytes = writer.into_inner().into_inner();
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+
+    let mut found = false;
+    for rec in reader.records() {
+        if let mcapable_core::Record::Metadata(md) = rec.unwrap() {
+            assert_eq!(md.name, ByteStr::from("config"));
+            assert_eq!(md.metadata.len(), 2);
+            found = true;
+        }
+    }
+    assert!(found, "metadata record should be present");
+}
+
+#[test]
+fn writer_into_inner_returns_sink() {
+    let out = Cursor::new(Vec::new());
+    let mut writer = WriterBuilder::new().build(out).unwrap();
+    writer.finish().unwrap();
+    let inner = writer.into_inner();
+    // The inner should be a Cursor<Vec<u8>> with valid MCAP data
+    let bytes = inner.into_inner();
+    assert!(bytes.len() > 16, "should have at least header + footer");
+    // Verify it starts with MCAP magic
+    assert_eq!(&bytes[..8], b"\x89MCAP0\r\n");
+}
+
+#[test]
+fn writer_validation_permissive() {
+    let out = Cursor::new(Vec::new());
+    let mut writer = WriterBuilder::new()
+        .validation(mcapable_core::writer::Validation::Permissive)
+        .build(out)
+        .unwrap();
+
+    // In permissive mode, we can write without schemas/channels
+    // Just verify it doesn't panic
+    writer.finish().unwrap();
+    let bytes = writer.into_inner().into_inner();
+    assert!(bytes.len() > 16);
+}
+
+#[test]
+fn writer_copy_chunk_record_preserves_data() {
+    // Build a source MCAP with chunked messages
+    let source_bytes = {
+        let out = Cursor::new(Vec::new());
+        let mut writer = WriterBuilder::new()
+            .profile("test")
+            .chunked(ChunkOptions {
+                compression: Some(Compression::Zstd),
+                max_uncompressed_bytes: 4_194_304,
+                include_crc: true,
+            })
+            .build(out)
+            .unwrap();
+
+        let schema = Schema {
+            id: 1,
+            name: ByteStr::from("pkg/Msg"),
+            encoding: ByteStr::from("jsonschema"),
+            data: Bytes::from_static(br#"{"type":"object"}"#),
+        };
+        writer.copy_schema(&schema).unwrap();
+
+        let channel = Channel {
+            id: 1,
+            topic: ByteStr::from("/test"),
+            message_encoding: ByteStr::from("json"),
+            schema_id: 1,
+            metadata: HashMap::new(),
+        };
+        let mut cw = writer.copy_channel(&channel).unwrap();
+        cw.write(100, 200, Bytes::from_static(b"hello")).unwrap();
+        cw.write(300, 400, Bytes::from_static(b"world")).unwrap();
+        drop(cw);
+        writer.finish().unwrap();
+        writer.into_inner().into_inner()
+    };
+
+    // Read records and copy chunk records without re-compression
+    let mut source_reader = mcapable_core::reader::Reader::from_slice(&source_bytes).unwrap();
+
+    let out = Cursor::new(Vec::new());
+    let mut dest_writer = WriterBuilder::new().profile("test").build(out).unwrap();
+
+    for record in source_reader.records() {
+        let record = record.unwrap();
+        dest_writer.copy_record(&record).unwrap();
+    }
+    dest_writer.finish().unwrap();
+    let dest_bytes = dest_writer.into_inner().into_inner();
+
+    // Verify messages are preserved
+    let mut dest_reader = mcapable_core::reader::Reader::from_slice(&dest_bytes).unwrap();
+    let mut msgs = Vec::new();
+    for msg in dest_reader.raw_messages().unwrap() {
+        let msg = msg.unwrap();
+        msgs.push((msg.log_time, msg.data_bytes().to_vec()));
+    }
+    assert_eq!(msgs.len(), 2);
+    assert_eq!(msgs[0].0, 100);
+    assert_eq!(msgs[0].1, b"hello");
+    assert_eq!(msgs[1].0, 300);
+    assert_eq!(msgs[1].1, b"world");
+
+    // Verify summary has chunk index entries (chunk was preserved, not re-chunked)
+    let summary = dest_reader.summary().unwrap().unwrap();
+    assert!(!summary.chunk_indexes.is_empty());
+}
+
+#[test]
+fn writer_copy_message_record_unchunked() {
+    // Write an unchunked source with a message
+    let source_bytes = {
+        let out = Cursor::new(Vec::new());
+        let mut writer = WriterBuilder::new().profile("test").build(out).unwrap();
+
+        let schema = Schema {
+            id: 1,
+            name: ByteStr::from("pkg/Msg"),
+            encoding: ByteStr::from("jsonschema"),
+            data: Bytes::from_static(br#"{"type":"object"}"#),
+        };
+        writer.copy_schema(&schema).unwrap();
+
+        let channel = Channel {
+            id: 1,
+            topic: ByteStr::from("/test"),
+            message_encoding: ByteStr::from("json"),
+            schema_id: 1,
+            metadata: HashMap::new(),
+        };
+        let mut cw = writer.copy_channel(&channel).unwrap();
+        cw.write_with_sequence(100, 200, Bytes::from_static(b"data1"), 42)
+            .unwrap();
+        drop(cw);
+        writer.finish().unwrap();
+        writer.into_inner().into_inner()
+    };
+
+    // Read messages and copy via copy_message_record
+    let mut source_reader = mcapable_core::reader::Reader::from_slice(&source_bytes).unwrap();
+
+    let out = Cursor::new(Vec::new());
+    let mut dest_writer = WriterBuilder::new().profile("test").build(out).unwrap();
+
+    // Copy schemas and channels first
+    for record in source_reader.records() {
+        let record = record.unwrap();
+        dest_writer.copy_record(&record).unwrap();
+    }
+    dest_writer.finish().unwrap();
+    let dest_bytes = dest_writer.into_inner().into_inner();
+
+    let mut dest_reader = mcapable_core::reader::Reader::from_slice(&dest_bytes).unwrap();
+    let mut count = 0;
+    for msg in dest_reader.raw_messages().unwrap() {
+        let msg = msg.unwrap();
+        assert_eq!(msg.sequence, 42);
+        assert_eq!(msg.log_time, 100);
+        assert_eq!(msg.publish_time, 200);
+        assert_eq!(msg.data_bytes().as_ref(), b"data1");
+        count += 1;
+    }
+    assert_eq!(count, 1);
 }

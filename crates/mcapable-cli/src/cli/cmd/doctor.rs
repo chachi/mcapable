@@ -1,14 +1,14 @@
 use std::io::Write;
 
-use super::open_reader_allow_missing_end_magic;
+use super::{open_reader_allow_missing_end_magic, CliResult};
 
-pub(crate) fn run(input: Option<String>, verbose: bool) -> Result<(), String> {
+pub fn run(input: Option<String>, verbose: bool) -> Result<(), String> {
     let mut stdout = std::io::stdout().lock();
     let strict_message_order = false; // TODO: get from global CLI flag
     run_with_output(input, strict_message_order, verbose, &mut stdout)
 }
 
-pub(crate) fn run_with_output<W: Write>(
+pub fn run_with_output<W: Write>(
     input: Option<String>,
     strict_message_order: bool,
     verbose: bool,
@@ -16,7 +16,7 @@ pub(crate) fn run_with_output<W: Write>(
 ) -> Result<(), String> {
     let mut reader = open_reader_allow_missing_end_magic(input.unwrap_or_else(|| "-".to_string()))?;
 
-    let data_section_schemas = reader.data_section_schemas().map_err(|e| e.to_string())?;
+    let data_section_schemas = reader.data_section_schemas().cli()?;
     for schema in data_section_schemas {
         if schema.encoding.as_ref().is_empty() && schema.data.is_empty() {
             writeln!(
@@ -25,11 +25,11 @@ pub(crate) fn run_with_output<W: Write>(
                 schema.id,
                 schema.name.as_ref()
             )
-            .map_err(|e| e.to_string())?;
+            .cli()?;
         }
     }
 
-    if let Some(summary) = reader.summary().map_err(|e| e.to_string())? {
+    if let Some(summary) = reader.summary().cli()? {
         for schema in summary.schemas.values() {
             if schema.encoding.as_ref().is_empty() && schema.data.is_empty() {
                 writeln!(
@@ -38,7 +38,7 @@ pub(crate) fn run_with_output<W: Write>(
                     schema.id,
                     schema.name.as_ref()
                 )
-                .map_err(|e| e.to_string())?;
+                .cli()?;
             }
         }
     }
@@ -55,14 +55,14 @@ pub(crate) fn run_with_output<W: Write>(
 
     if strict_message_order {
         let mut prev: Option<u64> = None;
-        for msg in reader.raw_messages().map_err(|e| e.to_string())? {
-            let msg = msg.map_err(|e| e.to_string())?;
+        for msg in reader.raw_messages().cli()? {
+            let msg = msg.cli()?;
             strict_check_monotonic(&mut prev, msg.log_time)?;
         }
     }
 
     if verbose {
-        writeln!(stdout, "records_ok: {record_count}").map_err(|e| e.to_string())?;
+        writeln!(stdout, "records_ok: {record_count}").cli()?;
     }
 
     Ok(())

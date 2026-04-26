@@ -2481,6 +2481,8 @@ dependencies = [
  "mcapable-core",
  "mcapable-opendal",
  "opendal",
+ "proptest",
+ "regex",
  "serde",
  "serde_json",
  "tabled",

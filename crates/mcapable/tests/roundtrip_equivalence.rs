@@ -109,6 +109,7 @@ fn create_mcapable_file(
         builder = builder.chunked(mcapable::ChunkOptions {
             compression,
             max_uncompressed_bytes: 4 * 1024 * 1024,
+            ..mcapable::ChunkOptions::default()
         });
     }
 

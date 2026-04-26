@@ -37,6 +37,7 @@ proptest! {
             builder = builder.chunked(ChunkOptions {
                 compression: chunk_compression,
                 max_uncompressed_bytes,
+                include_crc: true,
             });
         }
 

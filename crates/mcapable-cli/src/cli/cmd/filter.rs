@@ -1,55 +1,51 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::{
-    copy_attachments_and_metadata, copy_raw_messages, open_reader, parse_topics,
-    preload_schemas_and_channels, write_schemas_and_channels, writer_from_header,
+    copy_attachments_and_metadata_filtered, copy_raw_messages, open_reader, parse_topics,
+    preload_schemas_and_channels, resolve_time, write_schemas_and_channels, writer_from_header,
+    CliResult, OutputOptions,
 };
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run(
+pub fn run(
     input: Option<String>,
     output: Option<String>,
     topics: Vec<String>,
-    start: Option<u64>,
-    end: Option<u64>,
+    start: Option<String>,
+    end: Option<String>,
     start_secs: Option<u64>,
     start_nsecs: Option<u32>,
     end_secs: Option<u64>,
     end_nsecs: Option<u32>,
+    include_topic_regex: Vec<String>,
+    exclude_topic_regex: Vec<String>,
+    last_per_channel_topic_regex: Vec<String>,
+    include_metadata: bool,
+    include_attachments: bool,
+    output_options: OutputOptions,
 ) -> Result<(), String> {
-    // Handle start time: prefer 'start' if provided, otherwise compute from start_secs/start_nsecs
-    let start_time = if start.is_some() {
-        start
-    } else if let Some(secs) = start_secs {
-        let nsecs = start_nsecs.unwrap_or(0);
-        if nsecs >= 1_000_000_000 {
-            return Err("start_nsecs must be < 1_000_000_000".to_string());
-        }
-        Some(
-            secs.checked_mul(1_000_000_000)
-                .and_then(|v| v.checked_add(nsecs as u64))
-                .ok_or_else(|| "start timestamp overflow".to_string())?,
-        )
-    } else {
-        None
-    };
+    if !topics.is_empty() && !include_topic_regex.is_empty() {
+        return Err(
+            "cannot use both --topics and --include-topic-regex at the same time".to_string(),
+        );
+    }
 
-    // Handle end time: prefer 'end' if provided, otherwise compute from end_secs/end_nsecs
-    let end_time = if end.is_some() {
-        end
-    } else if let Some(secs) = end_secs {
-        let nsecs = end_nsecs.unwrap_or(0);
-        if nsecs >= 1_000_000_000 {
-            return Err("end_nsecs must be < 1_000_000_000".to_string());
-        }
-        Some(
-            secs.checked_mul(1_000_000_000)
-                .and_then(|v| v.checked_add(nsecs as u64))
-                .ok_or_else(|| "end timestamp overflow".to_string())?,
-        )
-    } else {
-        None
-    };
+    let start_time = resolve_time(start, start_secs, start_nsecs)?;
+    let end_time = resolve_time(end, end_secs, end_nsecs)?;
+
+    let last_per_channel_regexes: Vec<regex::Regex> = last_per_channel_topic_regex
+        .iter()
+        .map(|r| regex::Regex::new(r).map_err(|e| format!("invalid last-per-channel regex: {e}")))
+        .collect::<Result<_, _>>()?;
+
+    let include_regexes: Vec<regex::Regex> = include_topic_regex
+        .iter()
+        .map(|r| regex::Regex::new(r).map_err(|e| format!("invalid include regex: {e}")))
+        .collect::<Result<_, _>>()?;
+    let exclude_regexes: Vec<regex::Regex> = exclude_topic_regex
+        .iter()
+        .map(|r| regex::Regex::new(r).map_err(|e| format!("invalid exclude regex: {e}")))
+        .collect::<Result<_, _>>()?;
 
     let input = input.ok_or_else(|| "input file required".to_string())?;
     let output = output.ok_or_else(|| "output file required".to_string())?;
@@ -61,30 +57,101 @@ pub(crate) fn run(
     let topic_filter = parse_topics(topics_str);
 
     let mut reader = open_reader(input)?;
-    let header = reader.header().map_err(|e| e.to_string())?;
+    let header = reader.header().cli()?;
 
     preload_schemas_and_channels(&mut reader)?;
     let channels = reader.channels();
 
-    let allowed_channel_ids: Option<HashSet<u16>> = topic_filter.as_ref().map(|topics| {
-        channels
-            .iter()
-            .filter_map(|(id, ch)| topics.contains(ch.topic.as_str()).then_some(*id))
-            .collect()
-    });
+    // Build the set of allowed channel IDs from the various topic filters
+    let allowed_channel_ids: Option<HashSet<u16>> = {
+        let has_topic_filter =
+            topic_filter.is_some() || !include_regexes.is_empty() || !exclude_regexes.is_empty();
+        if has_topic_filter {
+            let ids: HashSet<u16> = channels
+                .iter()
+                .filter_map(|(id, ch)| {
+                    let topic = ch.topic.as_str();
+                    // Glob-based filter
+                    if let Some(ref topics) = topic_filter {
+                        if !topics.contains(topic) {
+                            return None;
+                        }
+                    }
+                    // Regex include filter
+                    if !include_regexes.is_empty()
+                        && !include_regexes.iter().any(|r| r.is_match(topic))
+                    {
+                        return None;
+                    }
+                    // Regex exclude filter
+                    if exclude_regexes.iter().any(|r| r.is_match(topic)) {
+                        return None;
+                    }
+                    Some(*id)
+                })
+                .collect();
+            Some(ids)
+        } else {
+            None
+        }
+    };
 
+    let chunk_options = output_options.to_chunk_options()?;
     let out = std::fs::File::create(&output).map_err(|e| format!("failed to create {e}"))?;
-    let mut writer = writer_from_header(
-        out,
-        &header,
-        Some(mcapable_core::writer::ChunkOptions {
-            compression: None,
-            max_uncompressed_bytes: 1048576,
-        }),
-    )?;
+    let mut writer = writer_from_header(out, &header, chunk_options)?;
 
     let mut channel_writers = write_schemas_and_channels(&reader, &mut writer)?;
-    copy_attachments_and_metadata(&mut reader, &mut writer)?;
+
+    copy_attachments_and_metadata_filtered(
+        &mut reader,
+        &mut writer,
+        include_attachments,
+        include_metadata,
+        |_| true,
+    )?;
+
+    // --last-per-channel-topic-regex: find the last message before start_time for matching channels
+    if !last_per_channel_regexes.is_empty() {
+        if let Some(start) = start_time {
+            let matching_channel_ids: HashSet<u16> = channels
+                .iter()
+                .filter(|(_, ch)| {
+                    let topic = ch.topic.as_str();
+                    last_per_channel_regexes.iter().any(|r| r.is_match(topic))
+                })
+                .map(|(id, _)| *id)
+                .collect();
+
+            if !matching_channel_ids.is_empty() {
+                // Track the latest pre-start message per channel
+                let mut last_before_start: HashMap<u16, mcapable_core::RawMessage> = HashMap::new();
+                for msg in reader.raw_messages().cli()? {
+                    let msg = msg.cli()?;
+                    if msg.log_time >= start {
+                        break;
+                    }
+                    if matching_channel_ids.contains(&msg.channel_id) {
+                        last_before_start.insert(msg.channel_id, msg);
+                    }
+                }
+                // Write the collected pre-start messages
+                for (_, msg) in last_before_start {
+                    let channel_writer = channel_writers
+                        .get_mut(&msg.channel_id)
+                        .ok_or_else(|| format!("missing channel_id {}", msg.channel_id))?;
+                    channel_writer
+                        .write_with_sequence(
+                            msg.log_time,
+                            msg.publish_time,
+                            msg.data_bytes(),
+                            msg.sequence,
+                        )
+                        .cli()?;
+                }
+            }
+        }
+    }
+
     copy_raw_messages(&mut reader, &mut writer, &mut channel_writers, |msg| {
         if let Some(start) = start_time {
             if msg.log_time < start {
@@ -104,6 +171,6 @@ pub(crate) fn run(
         true
     })?;
 
-    writer.finish().map_err(|e| e.to_string())?;
+    writer.finish().cli()?;
     Ok(())
 }

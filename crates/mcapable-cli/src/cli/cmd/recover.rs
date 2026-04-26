@@ -36,14 +36,19 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::open_reader_allow_missing_end_magic;
+use super::{open_reader_allow_missing_end_magic, CliResult, OutputOptions};
 
-pub(crate) fn run(input: Option<String>, output: Option<String>) -> Result<(), String> {
+pub fn run(
+    input: Option<String>,
+    output: Option<String>,
+    output_options: OutputOptions,
+) -> Result<(), String> {
     let input = input.unwrap_or_else(|| "-".to_string());
     let output = PathBuf::from(output.unwrap_or_else(|| "-".to_string()));
+    let chunk_options = output_options.to_chunk_options()?;
 
     let mut reader = open_reader_allow_missing_end_magic(input)?;
-    let header = reader.header().map_err(|e| e.to_string())?;
+    let header = reader.header().cli()?;
 
     let out = std::fs::File::create(&output)
         .map_err(|e| format!("failed to create {}: {e}", output.display()))?;
@@ -53,10 +58,13 @@ pub(crate) fn run(input: Option<String>, output: Option<String>) -> Result<(), S
         .library(recover_library_string(&header.library))
         .validation(mcapable_core::writer::Validation::Permissive)
         .always_write_summary(true);
+    if let Some(options) = chunk_options {
+        builder = builder.chunked(options);
+    }
     for (k, v) in &header.metadata {
         builder = builder.header_metadata(k.clone(), v.clone());
     }
-    let mut writer = builder.build(out).map_err(|e| e.to_string())?;
+    let mut writer = builder.build(out).cli()?;
 
     // Best-effort: if the input summary is readable, prime schema/channel definitions from it.
     // This allows recovery from files where those records are only present in the summary section
@@ -66,11 +74,11 @@ pub(crate) fn run(input: Option<String>, output: Option<String>) -> Result<(), S
     if let Ok(Some(summary)) = reader.summary() {
         for schema in summary.schemas.values() {
             wrote_schema_ids.insert(schema.id, ());
-            writer.copy_schema(schema).map_err(|e| e.to_string())?;
+            writer.copy_schema(schema).cli()?;
         }
         for channel in summary.channels.values() {
             wrote_channel_ids.insert(channel.id, ());
-            let _ = writer.copy_channel(channel).map_err(|e| e.to_string())?;
+            let _ = writer.copy_channel(channel).cli()?;
         }
     }
 
@@ -101,9 +109,9 @@ pub(crate) fn run(input: Option<String>, output: Option<String>) -> Result<(), S
             _ => {}
         }
 
-        writer.copy_record(&record).map_err(|e| e.to_string())?;
+        writer.copy_record(&record).cli()?;
     }
-    writer.finish().map_err(|e| e.to_string())?;
+    writer.finish().cli()?;
     Ok(())
 }
 

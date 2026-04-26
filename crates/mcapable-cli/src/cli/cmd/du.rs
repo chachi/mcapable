@@ -6,39 +6,50 @@ use crate::cli::input;
 
 use super::format_bytes;
 use super::table::{render_table, TableData};
+use super::CliResult;
 
-pub(crate) fn run(input: Option<String>) -> Result<(), String> {
+pub fn run(input: Option<String>, approximate: bool) -> Result<(), String> {
     let mut stdout = std::io::stdout().lock();
-    run_with_output(input, &mut stdout)
+    run_with_output(input, &mut stdout, approximate)
 }
 
-pub(crate) fn run_with_output<W: Write>(
+pub fn run_with_output<W: Write>(
     input: Option<String>,
     stdout: &mut W,
+    approximate: bool,
 ) -> Result<(), String> {
     let spec = input::InputSpec::parse(input.as_deref().unwrap_or("-"));
-    let source = input::open_source(&spec).map_err(|e| e.to_string())?;
+    let source = input::open_source(&spec).cli()?;
 
-    let mut reader = mcapable_core::reader::Builder::new()
-        .build(source)
-        .map_err(|e| e.to_string())?;
+    let mut reader = mcapable_core::reader::Builder::new().build(source).cli()?;
 
-    let summary_channels = reader
-        .summary()
-        .map_err(|e| e.to_string())?
-        .map(|summary| summary.channels.clone())
+    let summary = reader.summary().cli()?;
+    let summary_channels = summary
+        .as_ref()
+        .map(|s| s.channels.clone())
         .unwrap_or_default();
+
+    // In approximate mode, use summary statistics if available
+    if approximate {
+        if let Some(ref summary) = summary {
+            if let Some(ref stats) = summary.statistics {
+                return du_approximate(stdout, &reader, summary, stats);
+            }
+        }
+        eprintln!("warning: no summary statistics found, falling back to full scan");
+    }
+
     let (total_content_bytes, top_level, topics, total_msg_bytes) =
-        du_stats_single_pass(&mut reader, summary_channels).map_err(|e| e.to_string())?;
+        du_stats_single_pass(&mut reader, summary_channels).cli()?;
     let total_file_bytes = total_content_bytes.saturating_add(16);
 
-    writeln!(stdout, "Top level record stats:\n").map_err(|e| e.to_string())?;
+    writeln!(stdout, "Top level record stats:\n").cli()?;
     let table = build_top_level_table(total_file_bytes, &top_level);
-    writeln!(stdout, "{}", render_table(&table)).map_err(|e| e.to_string())?;
+    writeln!(stdout, "{}", render_table(&table)).cli()?;
 
-    writeln!(stdout, "\nMessage size stats:\n").map_err(|e| e.to_string())?;
+    writeln!(stdout, "\nMessage size stats:\n").cli()?;
     let table = build_message_size_table(topics, total_msg_bytes);
-    writeln!(stdout, "{}", render_table(&table)).map_err(|e| e.to_string())?;
+    writeln!(stdout, "{}", render_table(&table)).cli()?;
     Ok(())
 }
 
@@ -225,6 +236,72 @@ fn build_message_size_table(
         ],
         rows,
     )
+}
+
+fn du_approximate<W: Write>(
+    stdout: &mut W,
+    reader: &mcapable_core::reader::Reader<Box<dyn mcapable_core::source::BytesSource>>,
+    summary: &mcapable_core::types::Summary,
+    stats: &mcapable_core::types::Statistics,
+) -> Result<(), String> {
+    let channels = &summary.channels;
+
+    // Top-level: just show summary-level stats
+    writeln!(stdout, "Approximate disk usage (from summary):\n").cli()?;
+    writeln!(stdout, "  Messages: {}", stats.message_count).cli()?;
+    writeln!(stdout, "  Channels: {}", stats.channel_count).cli()?;
+    writeln!(stdout, "  Schemas:  {}", stats.schema_count).cli()?;
+    writeln!(stdout, "  Chunks:   {}", stats.chunk_count).cli()?;
+    let _ = reader; // available if we need file size later
+
+    // Per-topic message counts
+    writeln!(stdout, "\nMessage counts by topic:\n").cli()?;
+
+    let total_messages: u64 = stats
+        .channel_message_counts
+        .iter()
+        .map(|c| c.message_count)
+        .sum();
+
+    let mut topic_counts: Vec<(String, u64)> = stats
+        .channel_message_counts
+        .iter()
+        .map(|cmc| {
+            let topic = channels
+                .get(&cmc.channel_id)
+                .map(|c| c.topic.as_ref().to_string())
+                .unwrap_or_else(|| format!("<channel {}>", cmc.channel_id));
+            (topic, cmc.message_count)
+        })
+        .collect();
+    topic_counts.sort_by(|a, b| b.1.cmp(&a.1));
+
+    let table = {
+        let mut rows = Vec::new();
+        rows.push(vec![
+            "-----".to_string(),
+            "-------------".to_string(),
+            "-----".to_string(),
+        ]);
+        for (topic, count) in &topic_counts {
+            let pct = if total_messages == 0 {
+                0.0f32
+            } else {
+                (*count as f32) / (total_messages as f32) * 100.0
+            };
+            rows.push(vec![topic.clone(), count.to_string(), format!("{pct:.2}")]);
+        }
+        TableData::new(
+            vec![
+                "topic".to_string(),
+                "message count".to_string(),
+                "% of total".to_string(),
+            ],
+            rows,
+        )
+    };
+    writeln!(stdout, "{}", render_table(&table)).cli()?;
+    Ok(())
 }
 
 #[cfg(test)]
