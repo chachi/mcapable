@@ -160,6 +160,10 @@ fn override_stream_uses_empty_compression_string() {
     let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
     let summary = reader.summary().unwrap().expect("summary");
 
+    assert!(
+        !summary.chunk_indexes.is_empty(),
+        "expected at least one chunk index from 4×80-byte writes",
+    );
     for ci in summary.chunk_indexes.iter() {
         assert!(
             ci.compression.as_ref().is_empty(),
@@ -178,7 +182,7 @@ fn override_stream_flushes_on_its_own_threshold() {
     let out = Cursor::new(Vec::new());
     let mut writer = WriterBuilder::new()
         .chunked(ChunkOptions {
-            compression: None,
+            compression: Some(Compression::Zstd),
             max_uncompressed_bytes: 1 << 20, // huge — won't flush during the test
             include_crc: true,
         })
@@ -218,11 +222,21 @@ fn override_stream_flushes_on_its_own_threshold() {
         .iter()
         .filter(|ci| ci.compression.as_ref().is_empty())
         .count();
-    // Override flushes per message (6 writes); finish-flush leaves at most one
-    // extra. Default accumulates and flushes once at finish.
+    let default_chunks = summary
+        .chunk_indexes
+        .iter()
+        .filter(|ci| ci.compression.as_ref() == "zstd")
+        .count();
+    // Override stream's tiny threshold flushes per message (6 writes); finish
+    // leaves at most one extra empty chunk. Default's huge threshold means
+    // it produces exactly one zstd chunk at finish.
     assert!(
         override_chunks >= 6,
         "expected at least 6 override chunks (one per message), got {override_chunks}",
+    );
+    assert_eq!(
+        default_chunks, 1,
+        "default stream should flush exactly once at finish, got {default_chunks}",
     );
 }
 
