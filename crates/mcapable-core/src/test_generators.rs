@@ -45,6 +45,7 @@ pub fn metadata_map_strategy() -> impl Strategy<Value = HashMap<ByteStr, ByteStr
         mcap_string_strategy(),
         0..5, // 0-5 key-value pairs
     )
+    .prop_map(|m| m.into_iter().collect())
 }
 
 /// Generate valid Header records.
@@ -156,7 +157,8 @@ pub fn chunk_index_strategy() -> impl Strategy<Value = ChunkIndex> {
         any::<u64>(),
         any::<u64>(),
         1u64..100000u64,
-        prop::collection::hash_map(any::<u16>(), any::<u64>(), 0..5),
+        prop::collection::hash_map(any::<u16>(), any::<u64>(), 0..5)
+            .prop_map(|m| m.into_iter().collect::<HashMap<u16, u64>>()),
         0u64..100000u64,
         prop_oneof![Just(""), Just("lz4"), Just("zstd")].prop_map(ByteStr::from),
     )
