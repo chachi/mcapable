@@ -1,8 +1,8 @@
 use crate::error::Result;
+use crate::support::HashMap;
 use crate::types::Schema;
 use bytes::Bytes;
 use serde_json::Value;
-use std::collections::HashMap;
 
 pub(crate) struct Ros1SchemaParser {
     root_type: String,

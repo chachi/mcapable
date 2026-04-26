@@ -804,7 +804,7 @@ impl<R: BytesSource> Reader<R> {
     /// ```no_run
     /// # use mcapable_core::reader;
     /// # use std::fs::File;
-    /// # use std::collections::HashMap;
+    /// # use mcapable_core::collections::HashMap;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let file = File::open("data.mcap")?;
     /// # let mut reader = reader::Builder::new().build(file)?;
