@@ -58,7 +58,7 @@ mod support;
 /// The underlying type is backed by `rapidhash` for fast non-cryptographic
 /// hashing.
 pub mod collections {
-    pub use crate::support::{HashMap, HashSet};
+    pub use crate::support::{Entry, HashMap, HashSet};
 }
 pub mod types;
 pub mod zero_copy;

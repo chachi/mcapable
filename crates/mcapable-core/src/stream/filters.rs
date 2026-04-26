@@ -5,10 +5,9 @@
 use super::{ChannelPredicate, ReaderAccess};
 use crate::format::RECORD_HEADER_SIZE;
 use crate::records::try_decode_record_header;
-use crate::support::HashMap;
+use crate::support::{Entry, HashMap};
 use crate::types::{Chunk, ChunkMetadata, Opcode, Timestamp};
 use bytes::Bytes;
-use std::collections::hash_map::Entry;
 use std::io::SeekFrom;
 
 /// Cache schema or channel records during iteration.

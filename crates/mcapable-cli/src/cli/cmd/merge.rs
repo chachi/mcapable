@@ -1,5 +1,4 @@
-use mcapable_core::collections::{HashMap, HashSet};
-use std::collections::hash_map::Entry;
+use mcapable_core::collections::{Entry, HashMap, HashSet};
 use std::path::PathBuf;
 
 use super::{
