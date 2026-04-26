@@ -4,11 +4,11 @@
 
 use bytes::Bytes;
 use mcapable_cli::cli::cmd::filter::FilterOptions;
+use mcapable_core::collections::HashMap;
 use mcapable_core::writer::{ChunkOptions, WriterBuilder};
 use mcapable_core::zero_copy::ByteStr;
 use mcapable_core::{Channel, Schema};
 use proptest::prelude::*;
-use std::collections::HashMap;
 use tempfile::TempDir;
 
 // ---------------------------------------------------------------------------

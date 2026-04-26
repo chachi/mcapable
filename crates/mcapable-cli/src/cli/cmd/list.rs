@@ -1,6 +1,7 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::io::Write;
+
+use mcapable_core::collections::HashMap;
 
 use super::table::{render_table, TableData};
 use super::{open_reader, CliResult, ListCommand};

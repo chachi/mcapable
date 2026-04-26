@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use mcapable_core::collections::{HashMap, HashSet};
 use std::io::{Seek, Write};
 use std::path::PathBuf;
 

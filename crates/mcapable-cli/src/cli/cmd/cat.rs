@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use mcapable_core::collections::HashMap;
 use std::io::Write;
 
 use super::{open_reader, parse_topics, preload_schemas_and_channels, resolve_time, CliResult};

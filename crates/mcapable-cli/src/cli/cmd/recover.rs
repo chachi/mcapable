@@ -33,7 +33,7 @@
 //! Note: the CLI flags `--compression` and `--chunk-size` are currently ignored by `recover`.
 //! `recover` preserves existing chunk/message record boundaries instead of re-chunking.
 
-use std::collections::HashMap;
+use mcapable_core::collections::HashMap;
 use std::path::PathBuf;
 
 use super::{open_reader_allow_missing_end_magic, CliResult, OutputOptions};

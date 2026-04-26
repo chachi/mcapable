@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use mcapable_core::collections::HashMap;
 use std::io::Write;
 
 use super::{format_bytes, open_reader, CliResult};

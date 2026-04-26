@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use mcapable_core::collections::{HashMap, HashSet};
 
 use super::{
     copy_attachments_and_metadata_filtered, copy_raw_messages, open_reader, parse_topics,

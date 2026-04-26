@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use mcapable_core::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::sync::Arc;
 
@@ -154,7 +154,7 @@ fn build_top_level_table(
     total_file_bytes: u64,
     top_level: &HashMap<mcapable_core::Opcode, u64>,
 ) -> TableData {
-    let mut known_ops = std::collections::HashSet::new();
+    let mut known_ops = HashSet::new();
     for &opcode_opt in du_record_order() {
         if let Some(op) = opcode_opt {
             known_ops.insert(op);
