@@ -336,6 +336,29 @@ impl<W: Write + Seek> Writer<W> {
         })
     }
 
+    /// Copy a channel from another MCAP file *and* route its messages into a
+    /// dedicated chunk stream configured by `options`. Equivalent to
+    /// `add_channel(ChannelSpec::...chunk_override(options))` for the spec
+    /// path; this variant is for pipelines that only have a parsed `Channel`.
+    ///
+    /// Preserves the channel id from `channel`.
+    pub fn copy_channel_with_override(
+        &mut self,
+        channel: &Channel,
+        options: ChunkOptions,
+    ) -> Result<ChannelWriter<W>> {
+        let mut inner = self.inner.borrow_mut();
+        inner.write_channel_internal(channel)?;
+        inner.register_channel_override(channel.id, options);
+        drop(inner);
+        Ok(ChannelWriter {
+            inner: Rc::clone(&self.inner),
+            channel_id: channel.id,
+            next_sequence: 0,
+            has_chunk_override: true,
+        })
+    }
+
     /// Copy an attachment from another MCAP file.
     ///
     /// Use this when copying attachments from an existing file. For new attachments,

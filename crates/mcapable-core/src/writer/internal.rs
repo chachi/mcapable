@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 use crate::types::{Channel, Chunk, Header, Metadata, Opcode, RawMessage, Schema};
 use crate::zero_copy::ByteStr;
 
-use super::api::{ChannelSpec, SchemaSpec, Validation};
+use super::api::{ChannelSpec, ChunkOptions, SchemaSpec, Validation};
 use super::chunk::{ChunkState, prepare_chunk_for_write};
 use super::constants::MESSAGE_RECORD_PREFIX_LEN;
 use super::encode;
@@ -323,6 +323,17 @@ impl<W: Write + Seek> WriterImpl<W> {
         };
 
         Ok((id, has_override))
+    }
+
+    /// Register an override `ChunkState` for an already-known channel id.
+    /// Used by `Writer::copy_channel_with_override`.
+    pub(crate) fn register_channel_override(&mut self, channel_id: u16, options: ChunkOptions) {
+        let idx = channel_id as usize;
+        if self.override_streams.len() <= idx {
+            self.override_streams
+                .resize_with(idx.saturating_add(1), || None);
+        }
+        self.override_streams[idx] = Some(ChunkState::new(options));
     }
 
     pub(crate) fn write_attachment_internal(

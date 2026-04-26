@@ -66,3 +66,55 @@ fn override_channel_produces_uncompressed_chunk_alongside_default_zstd() {
     assert!(zstd_count > 0, "expected at least one zstd chunk");
     assert!(none_count > 0, "expected at least one uncompressed chunk");
 }
+
+/// `copy_channel_with_override` lets pipelines (merge/filter) impose an
+/// override on a channel they're copying from another file.
+#[test]
+fn copy_channel_with_override_routes_to_override_stream() {
+    use mcapable_core::Channel;
+    use mcapable_core::zero_copy::ByteStr;
+
+    let out = Cursor::new(Vec::new());
+    let mut writer = WriterBuilder::new()
+        .chunked(ChunkOptions {
+            compression: Some(Compression::Zstd),
+            max_uncompressed_bytes: 64,
+            include_crc: true,
+        })
+        .build(out)
+        .unwrap();
+
+    let channel = Channel {
+        id: 7,
+        topic: ByteStr::from("/copied"),
+        message_encoding: ByteStr::from("h264"),
+        schema_id: 0,
+        metadata: Default::default(),
+    };
+
+    let opts = ChunkOptions {
+        compression: None,
+        max_uncompressed_bytes: 32,
+        include_crc: true,
+    };
+
+    let mut ch = writer.copy_channel_with_override(&channel, opts).unwrap();
+    ch.write(1, 1, vec![b'z'; 64]).unwrap();
+    ch.write(2, 2, vec![b'z'; 64]).unwrap();
+    drop(ch);
+    writer.finish().unwrap();
+
+    let bytes = writer.into_inner().into_inner();
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+    let summary = reader.summary().unwrap().expect("summary");
+
+    let none_chunks: usize = summary
+        .chunk_indexes
+        .iter()
+        .filter(|ci| ci.compression.as_ref().is_empty())
+        .count();
+    assert!(
+        none_chunks > 0,
+        "expected at least one uncompressed chunk for copied channel"
+    );
+}
