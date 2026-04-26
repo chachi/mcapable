@@ -104,6 +104,7 @@ impl WriterBuilder {
             validation: self.validation,
             always_write_summary: self.always_write_summary,
             chunk_state: self.chunk_options.map(ChunkState::new),
+            override_streams: Vec::new(),
             schemas: HashMap::new(),
             channels: HashMap::new(),
             channel_stats: Vec::new(),

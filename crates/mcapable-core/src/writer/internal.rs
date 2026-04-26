@@ -29,6 +29,12 @@ pub(crate) struct WriterImpl<W: Write + Seek> {
     pub(crate) validation: Validation,
     pub(crate) always_write_summary: bool,
     pub(crate) chunk_state: Option<ChunkState>,
+    /// Per-channel override chunk streams, indexed by `channel_id`.
+    /// `Some(state)` means this channel has a `chunk_override` registered;
+    /// its messages flow into `state` instead of `chunk_state`. The vec
+    /// grows as channels are registered (mirrors `channel_stats`).
+    #[allow(dead_code)] // Populated by add_channel_spec in Task 4.
+    pub(crate) override_streams: Vec<Option<ChunkState>>,
     pub(crate) schemas: HashMap<u16, Schema>,
     pub(crate) channels: HashMap<u16, Channel>,
     pub(crate) channel_stats: Vec<ChannelStats>,
