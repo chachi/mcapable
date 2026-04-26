@@ -616,3 +616,169 @@ fn writer_copy_message_record_unchunked() {
     }
     assert_eq!(count, 1);
 }
+
+/// Helper: write a file with one default-stream channel and one override
+/// channel, returning (bytes, expected_default_messages, expected_override_messages).
+fn write_mixed_compression_file(
+    default_compression: Option<Compression>,
+    override_compression: Option<Compression>,
+) -> (Vec<u8>, Vec<Bytes>, Vec<Bytes>) {
+    let out = Cursor::new(Vec::new());
+    let mut writer = WriterBuilder::new()
+        .chunked(ChunkOptions {
+            compression: default_compression,
+            max_uncompressed_bytes: 64,
+            include_crc: true,
+        })
+        .build(out)
+        .unwrap();
+
+    let schema_spec =
+        mcapable_core::writer::SchemaSpec::new("pkg/Msg", "raw", Bytes::from_static(b""));
+    let mut default_ch = writer
+        .add_channel(
+            mcapable_core::writer::ChannelSpec::new("/telemetry", "raw")
+                .schema(schema_spec.clone()),
+        )
+        .unwrap();
+    let mut override_ch = writer
+        .add_channel(
+            mcapable_core::writer::ChannelSpec::new("/video", "h264")
+                .schema(schema_spec)
+                .chunk_override(ChunkOptions {
+                    compression: override_compression,
+                    max_uncompressed_bytes: 64,
+                    include_crc: true,
+                }),
+        )
+        .unwrap();
+
+    let mut default_msgs = Vec::new();
+    let mut override_msgs = Vec::new();
+    for i in 0..6u64 {
+        let dm = Bytes::from(vec![b'a'; 80]);
+        let om = Bytes::from(vec![b'A' + i as u8; 80]);
+        default_ch.write(1000 + i, 1000 + i, dm.clone()).unwrap();
+        override_ch.write(1000 + i, 1000 + i, om.clone()).unwrap();
+        default_msgs.push(dm);
+        override_msgs.push(om);
+    }
+    drop(default_ch);
+    drop(override_ch);
+    writer.finish().unwrap();
+
+    let bytes = writer.into_inner().into_inner();
+    (bytes, default_msgs, override_msgs)
+}
+
+#[test]
+fn writer_round_trip_mixed_compression_zstd_default_uncompressed_override() {
+    let (bytes, default_msgs, override_msgs) =
+        write_mixed_compression_file(Some(Compression::Zstd), None);
+
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+
+    // Collect (channel_id, data) pairs; metadata is loaded during iteration.
+    let mut got: Vec<(u16, Bytes)> = Vec::new();
+    for raw in reader.raw_messages().unwrap() {
+        let raw = raw.unwrap();
+        got.push((raw.channel_id, raw.data_bytes()));
+    }
+
+    // Now that the stream is done, channels are cached and can be queried.
+    let channels = reader.channels();
+    let topic_for = |id: u16| channels.get(&id).map(|c| c.topic.as_ref().to_string());
+
+    let mut got_telemetry: Vec<Bytes> = Vec::new();
+    let mut got_video: Vec<Bytes> = Vec::new();
+    for (ch_id, data) in got {
+        match topic_for(ch_id).as_deref() {
+            Some("/telemetry") => got_telemetry.push(data),
+            Some("/video") => got_video.push(data),
+            other => panic!("unexpected topic: {other:?}"),
+        }
+    }
+    assert_eq!(got_telemetry, default_msgs);
+    assert_eq!(got_video, override_msgs);
+}
+
+#[test]
+fn writer_round_trip_mixed_compression_lz4_default_uncompressed_override() {
+    let (bytes, default_msgs, override_msgs) =
+        write_mixed_compression_file(Some(Compression::Lz4), None);
+
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+
+    // Collect (channel_id, data) pairs; metadata is loaded during iteration.
+    let mut got: Vec<(u16, Bytes)> = Vec::new();
+    for raw in reader.raw_messages().unwrap() {
+        let raw = raw.unwrap();
+        got.push((raw.channel_id, raw.data_bytes()));
+    }
+
+    // Now that the stream is done, channels are cached and can be queried.
+    let channels = reader.channels();
+    let topic_for = |id: u16| channels.get(&id).map(|c| c.topic.as_ref().to_string());
+
+    let mut got_telemetry: Vec<Bytes> = Vec::new();
+    let mut got_video: Vec<Bytes> = Vec::new();
+    for (ch_id, data) in got {
+        match topic_for(ch_id).as_deref() {
+            Some("/telemetry") => got_telemetry.push(data),
+            Some("/video") => got_video.push(data),
+            other => panic!("unexpected topic: {other:?}"),
+        }
+    }
+    assert_eq!(got_telemetry, default_msgs);
+    assert_eq!(got_video, override_msgs);
+}
+
+#[test]
+fn reader_chunk_stream_sees_both_compressions_in_mixed_file() {
+    let (bytes, _, _) = write_mixed_compression_file(Some(Compression::Zstd), None);
+
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+    let mut zstd_chunks = 0usize;
+    let mut none_chunks = 0usize;
+    for chunk_res in reader.chunks() {
+        let chunk = chunk_res.unwrap();
+        match chunk.compression.as_ref() {
+            "zstd" => zstd_chunks += 1,
+            "" => none_chunks += 1,
+            other => panic!("unexpected compression {other:?}"),
+        }
+    }
+    assert!(zstd_chunks > 0, "expected at least one zstd chunk");
+    assert!(none_chunks > 0, "expected at least one uncompressed chunk");
+}
+
+#[test]
+fn summary_chunk_indexes_round_trip_for_mixed_file() {
+    let (bytes, _, _) = write_mixed_compression_file(Some(Compression::Zstd), None);
+
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+    let summary = reader.summary().unwrap().expect("summary");
+
+    // Every chunk index entry's offset+length must lie within the file.
+    for ci in summary.chunk_indexes.iter() {
+        let end = ci.chunk_start_offset + ci.chunk_length;
+        assert!(
+            end as usize <= bytes.len(),
+            "chunk index entry exceeds file: offset={}, length={}, file_len={}",
+            ci.chunk_start_offset,
+            ci.chunk_length,
+            bytes.len(),
+        );
+    }
+
+    // At least one zstd and one empty-compression entry must appear.
+    let mut compressions: Vec<String> = summary
+        .chunk_indexes
+        .iter()
+        .map(|ci| ci.compression.as_ref().to_string())
+        .collect();
+    compressions.sort();
+    compressions.dedup();
+    assert!(compressions.contains(&"zstd".to_string()));
+    assert!(compressions.contains(&"".to_string()));
+}
