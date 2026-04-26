@@ -1090,6 +1090,17 @@ fn rolling_writer_override_chunks_do_not_span_files() {
         "file 0 must have exactly 1 uncompressed chunk"
     );
 
+    let log_times0: Vec<u64> = reader0
+        .raw_messages()
+        .unwrap()
+        .map(|m| m.unwrap().log_time)
+        .collect();
+    assert_eq!(
+        log_times0,
+        vec![1, 2],
+        "file 0 must contain the 2 pre-split override messages",
+    );
+
     // File 1 must independently produce its own uncompressed chunk for the
     // post-split message.
     let mut reader1 = mcapable_core::reader::Reader::from_slice(&files[1]).unwrap();
@@ -1102,5 +1113,16 @@ fn rolling_writer_override_chunks_do_not_span_files() {
     assert_eq!(
         none_count1, 1,
         "file 1 must have exactly 1 uncompressed chunk"
+    );
+
+    let log_times1: Vec<u64> = reader1
+        .raw_messages()
+        .unwrap()
+        .map(|m| m.unwrap().log_time)
+        .collect();
+    assert_eq!(
+        log_times1,
+        vec![3],
+        "file 1 must contain only the post-split override message",
     );
 }

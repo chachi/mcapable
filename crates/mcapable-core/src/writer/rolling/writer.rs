@@ -135,6 +135,8 @@ impl<W: Write + Seek> RollingInner<W> {
             self.writer_impl.write_channel_internal(channel)?;
         }
         // Re-register per-channel overrides into the fresh WriterImpl.
+        // Clone because `register_channel_override` takes `ChunkOptions` by
+        // value while the loop borrows `&self.registered_overrides`.
         for (channel_id, opts) in &self.registered_overrides {
             self.writer_impl
                 .register_channel_override(*channel_id, opts.clone());
