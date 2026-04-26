@@ -147,11 +147,10 @@ impl<W: Write + Seek> WriterImpl<W> {
             self.sink.write_all(&compressed)?;
         }
 
-        if let Some(slot) = self.override_streams.get_mut(channel_idx)
-            && let Some(state) = slot.as_mut()
-        {
-            state.recycle_buffers(flush.message_prefixes, flush.payloads);
-        }
+        self.override_streams[channel_idx]
+            .as_mut()
+            .expect("override slot must still be Some after take_for_flush")
+            .recycle_buffers(flush.message_prefixes, flush.payloads);
         Ok(())
     }
 
@@ -850,9 +849,12 @@ impl<W: Write + Seek> WriterImpl<W> {
         );
 
         {
-            let state = self.override_streams[idx]
-                .as_mut()
-                .expect("override stream must be registered");
+            let state = self.override_streams[idx].as_mut().unwrap_or_else(|| {
+                panic!(
+                    "override stream must be registered for channel_id {}",
+                    message.channel_id,
+                )
+            });
             state.push_message(
                 message.channel_id,
                 message.sequence,

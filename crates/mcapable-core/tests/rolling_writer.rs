@@ -903,3 +903,26 @@ fn add_channel_after_finish_errors() {
     let result = rolling.add_channel(ChannelSpec::new("/topic", "json"));
     assert!(result.is_err());
 }
+
+#[test]
+fn rolling_writer_rejects_chunk_override() {
+    let (factory, _files) = CollectingFactory::new();
+    let trigger = MessageCount::new(1000);
+
+    let mut rolling = RollingWriterBuilder::new(factory, trigger)
+        .writer_builder(WriterBuilder::new().profile("test"))
+        .build()
+        .unwrap();
+
+    let result = rolling.add_channel(ChannelSpec::new("/cam", "h264").uncompressed_chunks());
+
+    let err = match result {
+        Ok(_) => panic!("expected rolling writer to reject chunk_override"),
+        Err(e) => e,
+    };
+    let msg = format!("{err}");
+    assert!(
+        msg.contains("rolling writer does not yet support ChannelSpec::chunk_override"),
+        "unexpected error message: {msg}",
+    );
+}
