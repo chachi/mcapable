@@ -646,7 +646,7 @@ fn write_metadata_to_current_file() {
         .build()
         .unwrap();
 
-    let mut meta_map = std::collections::HashMap::new();
+    let mut meta_map = mcapable_core::collections::HashMap::default();
     meta_map.insert(ByteStr::from("version"), ByteStr::from("1.0"));
     rolling
         .write_metadata(&Metadata {
@@ -745,7 +745,7 @@ fn metadata_not_re_emitted_on_split() {
     rolling
         .write_metadata(&Metadata {
             name: ByteStr::from("info"),
-            metadata: std::collections::HashMap::new(),
+            metadata: mcapable_core::collections::HashMap::default(),
         })
         .unwrap();
 

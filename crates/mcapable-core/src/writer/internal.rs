@@ -224,7 +224,7 @@ impl<W: Write + Seek> WriterImpl<W> {
         let mut total_message_count = 0u64;
         let mut earliest_time = u64::MAX;
         let mut latest_time = 0u64;
-        let mut channel_message_counts = HashMap::new();
+        let mut channel_message_counts: HashMap<u16, u64> = HashMap::default();
 
         for (idx, stats) in self.channel_stats.iter().enumerate() {
             if idx == 0 {

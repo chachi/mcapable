@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use mcapable_core::collections::{Entry, HashMap, HashSet};
 use std::path::PathBuf;
 
 use super::{
@@ -71,7 +71,8 @@ pub fn run(
     for schema in schemas.values() {
         writer.copy_schema(schema).cli()?;
     }
-    let mut channel_writers = HashMap::new();
+    let mut channel_writers: HashMap<u16, mcapable_core::writer::ChannelWriter<std::fs::File>> =
+        HashMap::default();
     for channel in registry.output_channels.values() {
         let channel_writer = writer.copy_channel(channel).cli()?;
         channel_writers.insert(channel.id, channel_writer);
@@ -79,7 +80,7 @@ pub fn run(
 
     // Collect all messages and metadata from all files
     let mut all_messages: Vec<(usize, mcapable_core::RawMessage)> = Vec::new();
-    let mut seen_metadata_names: HashSet<String> = HashSet::new();
+    let mut seen_metadata_names: HashSet<String> = HashSet::default();
 
     for (file_idx, input) in inputs.iter().enumerate() {
         let mut reader = open_reader(input.clone())?;
@@ -139,9 +140,9 @@ struct ChannelRegistry {
 impl ChannelRegistry {
     fn new() -> Self {
         Self {
-            channel_map: HashMap::new(),
-            output_channels: HashMap::new(),
-            coalesce_index: HashMap::new(),
+            channel_map: HashMap::default(),
+            output_channels: HashMap::default(),
+            coalesce_index: HashMap::default(),
             next_id: 0,
         }
     }
@@ -180,7 +181,7 @@ impl ChannelRegistry {
             }
             "none" => {
                 match self.output_channels.entry(original_id) {
-                    std::collections::hash_map::Entry::Occupied(entry) => {
+                    Entry::Occupied(entry) => {
                         if entry.get() != channel {
                             return Err(format!(
                                 "conflicting channel id {} (use --coalesce-channels auto to coalesce)",
@@ -188,7 +189,7 @@ impl ChannelRegistry {
                             ));
                         }
                     }
-                    std::collections::hash_map::Entry::Vacant(entry) => {
+                    Entry::Vacant(entry) => {
                         entry.insert(channel.clone());
                     }
                 }

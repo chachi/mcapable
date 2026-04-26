@@ -74,7 +74,7 @@ fn test_statistics_multiple_channels() {
     let mut reader = reader::Builder::new().build(cursor).unwrap();
 
     let messages: Vec<_> = reader.messages().unwrap().map(|m| m.unwrap()).collect();
-    let distinct_channels: std::collections::HashSet<_> =
+    let distinct_channels: mcapable_core::collections::HashSet<_> =
         messages.iter().map(|m| m.channel_id).collect();
     assert!(distinct_channels.len() >= 2);
 }

@@ -156,7 +156,7 @@ struct JsRecord {
 }
 
 fn metadata_to_vec(
-    metadata: &std::collections::HashMap<
+    metadata: &mcapable_core::collections::HashMap<
         mcapable_core::zero_copy::ByteStr,
         mcapable_core::zero_copy::ByteStr,
     >,

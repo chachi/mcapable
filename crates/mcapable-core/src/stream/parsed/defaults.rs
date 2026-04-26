@@ -1,8 +1,8 @@
 use super::super::{schema_defaults, schema_parser::SchemaParser};
 use crate::error::Result;
+use crate::support::{Entry, HashMap};
 use crate::types::Schema;
 use bytes::Bytes;
-use std::collections::{HashMap, hash_map::Entry};
 
 pub(super) struct DefaultParsers<'a, T> {
     json_mapper: Box<dyn Fn(serde_json::Value) -> Result<T> + 'a>,
@@ -19,7 +19,7 @@ impl<'a, T> DefaultParsers<'a, T> {
         Self {
             json_mapper: Box::new(json_mapper),
             bytes_mapper: Box::new(bytes_mapper),
-            schema_parsers: HashMap::new(),
+            schema_parsers: HashMap::default(),
         }
     }
 

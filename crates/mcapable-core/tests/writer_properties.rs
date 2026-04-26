@@ -192,8 +192,8 @@ proptest! {
 
         let mut expected: Vec<(u16, u32, Vec<u8>)> = Vec::new();
         let mut t = 1000u64;
-        use std::collections::HashMap;
-        let mut next_seq: HashMap<u16, u32> = HashMap::new();
+        use mcapable_core::collections::HashMap;
+        let mut next_seq: HashMap<u16, u32> = HashMap::default();
         for (tag, data) in &msgs {
             t += 1;
             let ch_id = match tag {
@@ -228,7 +228,7 @@ proptest! {
         // sequences match (order within a channel must be preserved; relative
         // order between channels follows log_time, which is monotonic above).
         let group = |v: &Vec<(u16, u32, Vec<u8>)>| -> HashMap<u16, Vec<(u32, Vec<u8>)>> {
-            let mut m: HashMap<u16, Vec<(u32, Vec<u8>)>> = HashMap::new();
+            let mut m: HashMap<u16, Vec<(u32, Vec<u8>)>> = HashMap::default();
             for (id, seq, data) in v {
                 m.entry(*id).or_default().push((*seq, data.clone()));
             }

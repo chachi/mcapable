@@ -4,7 +4,8 @@
 //! This is a thin wrapper around mcap::Writer that provides a builder-style API
 //! for creating test MCAP files with specific characteristics.
 
-use std::collections::{BTreeMap, HashMap};
+use mcapable_core::collections::HashMap;
+use std::collections::BTreeMap;
 use std::io::Cursor;
 
 /// Compression type for test MCAP files.
@@ -70,7 +71,7 @@ impl McapBuilder {
             chunked: true,
             chunk_size: Some(1024 * 1024), // 1MB default
             profile: String::new(),
-            metadata: HashMap::new(),
+            metadata: HashMap::default(),
         }
     }
 
@@ -241,7 +242,8 @@ impl McapBuilder {
         // Collect unique schemas and create Schema objects.
         //
         // Note: mcap v0.24+ requires explicit IDs on Schema/Channel structs.
-        let mut schema_map: HashMap<u16, std::sync::Arc<mcap::Schema<'static>>> = HashMap::new();
+        let mut schema_map: HashMap<u16, std::sync::Arc<mcap::Schema<'static>>> =
+            HashMap::default();
         for channel in &self.channels {
             if channel.schema_id != 0
                 && !schema_map.contains_key(&channel.schema_id)
@@ -262,7 +264,8 @@ impl McapBuilder {
         }
 
         // Create Channel objects with stable IDs so mcapable can assert on them.
-        let mut channel_map: HashMap<u16, std::sync::Arc<mcap::Channel<'static>>> = HashMap::new();
+        let mut channel_map: HashMap<u16, std::sync::Arc<mcap::Channel<'static>>> =
+            HashMap::default();
         for channel in &self.channels {
             let schema = if channel.schema_id == 0 {
                 None

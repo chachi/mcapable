@@ -141,7 +141,7 @@ impl ChannelSpec {
             topic: topic.into(),
             message_encoding: message_encoding.into(),
             schema: None,
-            metadata: HashMap::new(),
+            metadata: HashMap::default(),
             chunk_override: None,
         }
     }

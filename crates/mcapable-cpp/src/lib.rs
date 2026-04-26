@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use cxx::CxxString;
+use mcapable_core::collections::HashMap;
 use mcapable_core::reader::{Builder as CoreReaderBuilder, Reader as CoreReader};
 use mcapable_core::source::{ArenaBytesSource, BytesCursor, BytesSource};
 use mcapable_core::zero_copy::ByteStr;
@@ -8,7 +9,6 @@ use mcapable_core::{
     RecordMetadata, RecordSource, Schema,
 };
 use serde_json::Value as JsonValue;
-use std::collections::HashMap;
 
 type ReaderHandle = CoreReader<Box<dyn BytesSource>>;
 

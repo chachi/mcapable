@@ -151,7 +151,7 @@ pub fn metadata_map(input: &[u8]) -> IResult<&[u8], HashMap<ByteStr, ByteStr>> {
     let (input, map_length) = le_u32(input)?;
     let (remaining, map_data) = take(map_length)(input)?;
 
-    let mut map = HashMap::new();
+    let mut map = HashMap::default();
     let mut input = map_data;
 
     while !input.is_empty() {
@@ -171,7 +171,7 @@ pub fn metadata_map_span<'a>(input: Span<'a>) -> IResult<Span<'a>, HashMap<ByteS
     let map_length: usize = map_length as usize;
     let (remaining, map_span) = take(map_length)(input)?;
 
-    let mut map = HashMap::new();
+    let mut map = HashMap::default();
     let mut cursor = map_span;
 
     while !cursor.fragment().is_empty() {
@@ -190,7 +190,7 @@ pub fn parse_header_record(input: Bytes) -> Result<Header, crate::Error> {
         .map_err(|_| crate::Error::ParseError(crate::ParseError::Opcode(Opcode::Header)))?;
 
     let (_, metadata) = if span.fragment().is_empty() {
-        (span, HashMap::new())
+        (span, HashMap::default())
     } else {
         metadata_map_span(span)
             .map_err(|_| crate::Error::ParseError(crate::ParseError::Opcode(Opcode::Header)))?
@@ -383,7 +383,7 @@ pub fn parse_chunk_index_record(input: Bytes) -> Result<ChunkIndex, crate::Error
         .map_err(|_| crate::Error::ParseError(crate::ParseError::Opcode(Opcode::ChunkIndex)))?;
     let map_bytes = bytes_from_span(map_span);
 
-    let mut message_index_offsets = HashMap::new();
+    let mut message_index_offsets = HashMap::default();
     let mut map_input: &[u8] = map_bytes.as_ref();
     while !map_input.is_empty() {
         let (rest, (channel_id, offset)) =

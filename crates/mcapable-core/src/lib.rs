@@ -51,6 +51,15 @@ pub mod format;
 #[cfg(feature = "std")]
 mod std;
 mod support;
+/// Hash-map / hash-set type aliases used throughout the workspace.
+///
+/// These exist so consumers can import `HashMap`/`HashSet` from a single
+/// location instead of pulling them in directly from `std::collections`.
+/// The underlying type is backed by `rapidhash` for fast non-cryptographic
+/// hashing.
+pub mod collections {
+    pub use crate::support::{Entry, HashMap, HashSet};
+}
 pub mod types;
 pub mod zero_copy;
 

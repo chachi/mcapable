@@ -269,8 +269,8 @@ impl<R: BytesSource> Reader<R> {
         }
 
         let mut statistics: Option<Statistics> = None;
-        let mut schemas = HashMap::new();
-        let mut channels = HashMap::new();
+        let mut schemas = HashMap::default();
+        let mut channels = HashMap::default();
         let mut chunk_indexes = Vec::new();
         let mut message_indexes = Vec::new();
         let mut attachment_indexes = Vec::new();
@@ -804,11 +804,11 @@ impl<R: BytesSource> Reader<R> {
     /// ```no_run
     /// # use mcapable_core::reader;
     /// # use std::fs::File;
-    /// # use std::collections::HashMap;
+    /// # use mcapable_core::collections::HashMap;
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let file = File::open("data.mcap")?;
     /// # let mut reader = reader::Builder::new().build(file)?;
-    /// let mut sizes: HashMap<u16, u64> = HashMap::new();
+    /// let mut sizes: HashMap<u16, u64> = HashMap::default();
     /// for metadata in reader.message_metadata()? {
     ///     let m = metadata?;
     ///     *sizes.entry(m.channel_id).or_insert(0) += m.data_size;
@@ -1012,13 +1012,13 @@ impl Builder {
             file_end: None,
             header: None,
             footer: None,
-            schemas: Arc::new(HashMap::new()),
-            channels: Arc::new(HashMap::new()),
+            schemas: Arc::new(HashMap::default()),
+            channels: Arc::new(HashMap::default()),
             summary: None,
             summary_loaded: false,
             footer_loaded: false,
-            metadata: Arc::new(HashMap::new()),
-            attachments: Arc::new(HashMap::new()),
+            metadata: Arc::new(HashMap::default()),
+            attachments: Arc::new(HashMap::default()),
         })
     }
 

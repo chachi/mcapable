@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use mcapable_core::collections::{HashMap, HashSet};
 use std::io::{Seek, Write};
 use std::path::PathBuf;
 
@@ -335,7 +335,7 @@ fn write_schemas_and_channels<R: mcapable_core::source::BytesSource, W: Write + 
     for schema in reader.schemas().values() {
         writer.copy_schema(schema).cli()?;
     }
-    let mut channel_writers = HashMap::new();
+    let mut channel_writers = HashMap::default();
     for channel in reader.channels().values() {
         let channel_writer = writer.copy_channel(channel).cli()?;
         channel_writers.insert(channel.id, channel_writer);
@@ -421,7 +421,7 @@ fn copy_raw_messages<R: mcapable_core::source::BytesSource, W: Write + Seek>(
 pub(crate) fn parse_metadata_kv_pairs(
     kvs: Vec<String>,
 ) -> Result<HashMap<mcapable_core::zero_copy::ByteStr, mcapable_core::zero_copy::ByteStr>, String> {
-    let mut map = HashMap::new();
+    let mut map = HashMap::default();
     for kv in kvs {
         let (k, v) = kv
             .split_once('=')

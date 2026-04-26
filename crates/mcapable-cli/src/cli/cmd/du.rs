@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use mcapable_core::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::sync::Arc;
 
@@ -64,9 +64,9 @@ fn du_stats_single_pass(
     reader: &mut mcapable_core::reader::Reader<Box<dyn mcapable_core::source::BytesSource>>,
     summary_channels: Arc<HashMap<u16, mcapable_core::Channel>>,
 ) -> Result<DuStats, mcapable_core::Error> {
-    let mut totals: HashMap<mcapable_core::Opcode, u64> = HashMap::new();
+    let mut totals: HashMap<mcapable_core::Opcode, u64> = HashMap::default();
     let mut total_bytes: u64 = 0;
-    let mut by_channel_id: HashMap<u16, u64> = HashMap::new();
+    let mut by_channel_id: HashMap<u16, u64> = HashMap::default();
     let mut total_msg_bytes: u64 = 0;
 
     let mut stream = reader
@@ -97,7 +97,7 @@ fn du_stats_single_pass(
         summary_channels
     };
 
-    let mut by_topic: HashMap<mcapable_core::zero_copy::ByteStr, (u64, u16)> = HashMap::new();
+    let mut by_topic: HashMap<mcapable_core::zero_copy::ByteStr, (u64, u16)> = HashMap::default();
     for (channel_id, bytes) in by_channel_id {
         let Some(ch) = channels.get(&channel_id) else {
             continue;
@@ -154,7 +154,7 @@ fn build_top_level_table(
     total_file_bytes: u64,
     top_level: &HashMap<mcapable_core::Opcode, u64>,
 ) -> TableData {
-    let mut known_ops = std::collections::HashSet::new();
+    let mut known_ops: HashSet<mcapable_core::Opcode> = HashSet::default();
     for &opcode_opt in du_record_order() {
         if let Some(op) = opcode_opt {
             known_ops.insert(op);
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn top_level_table_includes_unknown_when_present() {
-        let mut totals = HashMap::new();
+        let mut totals = HashMap::default();
         totals.insert(mcapable_core::Opcode::Header, 10);
         totals.insert(mcapable_core::Opcode::Message, 20);
         totals.insert(mcapable_core::Opcode::DataEnd, 1);

@@ -5,7 +5,7 @@
 use super::{ChannelPredicate, ReaderAccess};
 use crate::format::RECORD_HEADER_SIZE;
 use crate::records::try_decode_record_header;
-use crate::support::HashMap;
+use crate::support::{Entry, HashMap};
 use crate::types::{Chunk, ChunkMetadata, Opcode, Timestamp};
 use bytes::Bytes;
 use std::io::SeekFrom;
@@ -52,7 +52,7 @@ pub(super) fn chunk_might_have_messages_in_range_via_index(
         return true;
     }
 
-    let mut cache: HashMap<u64, Option<crate::types::MessageIndex>> = HashMap::new();
+    let mut cache: HashMap<u64, Option<crate::types::MessageIndex>> = HashMap::default();
 
     for (channel_id, message_index_offset) in &index.message_index_offsets {
         if let Some(predicate) = channel_predicate
@@ -66,8 +66,8 @@ pub(super) fn chunk_might_have_messages_in_range_via_index(
         }
 
         let msg_index = match cache.entry(*message_index_offset) {
-            std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
-            std::collections::hash_map::Entry::Vacant(e) => {
+            Entry::Occupied(e) => e.get().clone(),
+            Entry::Vacant(e) => {
                 let original_pos = match reader.source().stream_position() {
                     Ok(p) => p,
                     Err(_) => return true,

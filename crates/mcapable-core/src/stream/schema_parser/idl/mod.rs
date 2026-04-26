@@ -1,8 +1,8 @@
 use crate::error::Result;
+use crate::support::HashMap;
 use crate::types::Schema;
 use serde::de::DeserializeSeed;
 use serde_json::Value;
-use std::collections::HashMap;
 
 mod decode;
 mod parse;

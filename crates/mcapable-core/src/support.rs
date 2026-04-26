@@ -1,7 +1,8 @@
 #[cfg(feature = "std")]
 mod imp {
+    pub use rapidhash::{RapidHashMap as HashMap, RapidHashSet as HashSet};
     pub use std::borrow::Borrow;
-    pub use std::collections::HashMap;
+    pub use std::collections::hash_map::Entry;
     pub use std::error;
     pub use std::fmt;
     pub use std::format;
@@ -25,7 +26,9 @@ mod imp {
     pub use core::ops;
     pub use core::result::Result;
     pub use core::str;
-    pub use hashbrown::HashMap;
+    pub type HashMap<K, V> = hashbrown::HashMap<K, V, rapidhash::fast::RandomState>;
+    pub type HashSet<T> = hashbrown::HashSet<T, rapidhash::fast::RandomState>;
+    pub use hashbrown::hash_map::Entry;
 }
 
 pub use imp::*;

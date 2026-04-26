@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use mcapable_core::collections::HashMap;
 use std::io::Write;
 
 use super::{format_bytes, open_reader, CliResult};
@@ -215,7 +215,7 @@ struct MessageSummary {
 fn summarize_messages_from_summary(
     summary: &mcapable_core::Summary,
 ) -> (MessageSummary, HashMap<u16, u64>) {
-    let mut per_channel: HashMap<u16, u64> = HashMap::new();
+    let mut per_channel: HashMap<u16, u64> = HashMap::default();
 
     let Some(stats) = summary.statistics.as_deref() else {
         return (
@@ -250,7 +250,7 @@ fn gather_chunk_stats_from_summary(
     summary: &mcapable_core::Summary,
 ) -> Result<(ChunkStats, HashMap<String, CompressionStats>), String> {
     let mut out = ChunkStats::default();
-    let mut per_compression: HashMap<String, CompressionStats> = HashMap::new();
+    let mut per_compression: HashMap<String, CompressionStats> = HashMap::default();
     let mut prev_end: Option<u64> = None;
 
     let mut chunk_indexes = summary.chunk_indexes.as_ref().to_vec();
@@ -384,7 +384,7 @@ mod tests {
 
     #[test]
     fn build_channel_rows_uses_schema_info() {
-        let mut channels = HashMap::new();
+        let mut channels = HashMap::default();
         channels.insert(
             1,
             mcapable_core::Channel {
@@ -392,10 +392,10 @@ mod tests {
                 schema_id: 2,
                 topic: "/topic".into(),
                 message_encoding: "cdr".into(),
-                metadata: HashMap::new(),
+                metadata: HashMap::default(),
             },
         );
-        let mut schemas = HashMap::new();
+        let mut schemas = HashMap::default();
         schemas.insert(
             2,
             mcapable_core::Schema {
@@ -405,7 +405,7 @@ mod tests {
                 data: Vec::new().into(),
             },
         );
-        let mut counts = HashMap::new();
+        let mut counts = HashMap::default();
         counts.insert(1, 10);
 
         let rows = build_channel_rows(&channels, &schemas, &counts, 0, 1_000_000_000);

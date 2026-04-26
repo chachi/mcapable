@@ -33,7 +33,7 @@
 //! Note: the CLI flags `--compression` and `--chunk-size` are currently ignored by `recover`.
 //! `recover` preserves existing chunk/message record boundaries instead of re-chunking.
 
-use std::collections::HashMap;
+use mcapable_core::collections::HashMap;
 use std::path::PathBuf;
 
 use super::{open_reader_allow_missing_end_magic, CliResult, OutputOptions};
@@ -69,8 +69,8 @@ pub fn run(
     // Best-effort: if the input summary is readable, prime schema/channel definitions from it.
     // This allows recovery from files where those records are only present in the summary section
     // (e.g. synthetic fixtures or severe corruption in the early data section).
-    let mut wrote_schema_ids: HashMap<u16, ()> = HashMap::new();
-    let mut wrote_channel_ids: HashMap<u16, ()> = HashMap::new();
+    let mut wrote_schema_ids: HashMap<u16, ()> = HashMap::default();
+    let mut wrote_channel_ids: HashMap<u16, ()> = HashMap::default();
     if let Ok(Some(summary)) = reader.summary() {
         for schema in summary.schemas.values() {
             wrote_schema_ids.insert(schema.id, ());

@@ -1,10 +1,10 @@
 //! Tests for Reader API methods that lack coverage.
 
 use bytes::Bytes;
+use mcapable_core::collections::HashMap;
 use mcapable_core::writer::{ChunkOptions, WriterBuilder};
 use mcapable_core::zero_copy::ByteStr;
 use mcapable_core::{Channel, Schema};
-use std::collections::HashMap;
 use std::io::Cursor;
 
 /// Build a fixture MCAP with schema, channel, messages, attachment, and metadata.
@@ -31,7 +31,7 @@ fn build_fixture() -> Vec<u8> {
         topic: ByteStr::from("/test"),
         message_encoding: ByteStr::from("json"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut cw = writer.copy_channel(&channel).unwrap();
     cw.write(100, 200, Bytes::from_static(b"msg1")).unwrap();
@@ -51,7 +51,7 @@ fn build_fixture() -> Vec<u8> {
     let md = mcapable_core::types::Metadata {
         name: ByteStr::from("config"),
         metadata: {
-            let mut m = HashMap::new();
+            let mut m = HashMap::default();
             m.insert(ByteStr::from("env"), ByteStr::from("test"));
             m
         },
@@ -262,7 +262,7 @@ fn build_json_fixture() -> Vec<u8> {
         topic: ByteStr::from("/data"),
         message_encoding: ByteStr::from("json"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut cw = writer.copy_channel(&channel).unwrap();
     cw.write(100, 200, Bytes::from_static(br#"{"value":42}"#))

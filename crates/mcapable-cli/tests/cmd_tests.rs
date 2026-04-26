@@ -6,10 +6,10 @@
 use bytes::Bytes;
 use mcapable_cli::cli::cmd::cat::CatOptions;
 use mcapable_cli::cli::cmd::filter::FilterOptions;
+use mcapable_core::collections::HashMap;
 use mcapable_core::writer::{ChunkOptions, WriterBuilder};
 use mcapable_core::zero_copy::ByteStr;
 use mcapable_core::{Channel, Schema};
-use std::collections::HashMap;
 use tempfile::TempDir;
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ fn write_fixture_multi_topic(
             topic: ByteStr::from(*topic),
             message_encoding: ByteStr::from("json"),
             schema_id: 1,
-            metadata: HashMap::new(),
+            metadata: HashMap::default(),
         };
         let cw = writer.copy_channel(&channel).unwrap();
         channel_writers.push(cw);
@@ -102,7 +102,7 @@ fn write_fixture_with_metadata_and_attachment(dir: &TempDir, name: &str) -> Stri
         topic: ByteStr::from("/test"),
         message_encoding: ByteStr::from("json"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut cw = writer.copy_channel(&channel).unwrap();
     cw.write(100, 100, Bytes::from_static(b"hello")).unwrap();
@@ -121,7 +121,7 @@ fn write_fixture_with_metadata_and_attachment(dir: &TempDir, name: &str) -> Stri
     let md = mcapable_core::types::Metadata {
         name: ByteStr::from("test-meta"),
         metadata: {
-            let mut m = HashMap::new();
+            let mut m = HashMap::default();
             m.insert(ByteStr::from("key1"), ByteStr::from("val1"));
             m
         },
@@ -296,7 +296,7 @@ fn merge_incompatible_profiles_errors() {
         topic: ByteStr::from("/test"),
         message_encoding: ByteStr::from("json"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut cw = writer.copy_channel(&channel).unwrap();
     cw.write(100, 100, Bytes::from_static(b"x")).unwrap();
@@ -990,7 +990,7 @@ fn cat_json_produces_valid_jsonl() {
         topic: ByteStr::from("/data"),
         message_encoding: ByteStr::from("json"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut cw = writer.copy_channel(&channel).unwrap();
     cw.write(1000, 2000, Bytes::from_static(br#"{"value":42}"#))
@@ -1058,7 +1058,7 @@ fn cat_json_unknown_encoding_produces_null_data() {
         topic: ByteStr::from("/binary"),
         message_encoding: ByteStr::from("custom"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut cw = writer.copy_channel(&channel).unwrap();
     cw.write(100, 200, Bytes::from_static(b"\x00\x01\x02"))
@@ -1145,7 +1145,7 @@ fn merge_coalesce_auto_errors_on_conflicting_metadata() {
             data: Bytes::from_static(br#"{"type":"object"}"#),
         };
         writer.copy_schema(&schema).unwrap();
-        let mut meta = HashMap::new();
+        let mut meta = HashMap::default();
         meta.insert(ByteStr::from("key1"), ByteStr::from("val1"));
         let channel = Channel {
             id: 1,
@@ -1176,7 +1176,7 @@ fn merge_coalesce_auto_errors_on_conflicting_metadata() {
             data: Bytes::from_static(br#"{"type":"object"}"#),
         };
         writer.copy_schema(&schema).unwrap();
-        let mut meta = HashMap::new();
+        let mut meta = HashMap::default();
         meta.insert(ByteStr::from("key1"), ByteStr::from("val2"));
         let channel = Channel {
             id: 1,
@@ -1380,7 +1380,7 @@ fn du_approximate_unchunked_falls_back() {
         topic: ByteStr::from("/test"),
         message_encoding: ByteStr::from("json"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut cw = writer.copy_channel(&channel).unwrap();
     cw.write(100, 100, Bytes::from_static(b"hello")).unwrap();

@@ -1,8 +1,8 @@
 use crate::error::Result;
+use crate::support::HashMap;
 use crate::types::Schema;
 use bytes::Bytes;
 use serde_json::Value;
-use std::collections::HashMap;
 
 pub(crate) struct Ros1SchemaParser {
     root_type: String,
@@ -71,7 +71,7 @@ fn parse_ros1_definitions(
     schema_text: &str,
     root_name: &str,
 ) -> Result<HashMap<String, RosMessage>> {
-    let mut messages = HashMap::new();
+    let mut messages = HashMap::default();
     let root_pkg = root_name.split('/').next().unwrap_or(root_name);
 
     for block in schema_text.split(

@@ -4,8 +4,8 @@
 //! and that all metadata (headers, footers, channels, schemas, messages) is preserved.
 
 use bytes::Bytes;
+use mcapable_core::collections::HashMap;
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -127,7 +127,7 @@ fn create_mcapable_file(
     }
 
     // Write channels - convert String metadata to ByteStr
-    let mut channel_writers: HashMap<u16, _> = HashMap::new();
+    let mut channel_writers: HashMap<u16, _> = HashMap::default();
     for (id, topic, encoding, schema_id, metadata) in channels {
         let metadata_bs: HashMap<mcapable::ByteStr, mcapable::ByteStr> = metadata
             .into_iter()
@@ -246,7 +246,12 @@ fn extract_mcapable_messages(mcap_data: &[u8]) -> Vec<(u16, u32, u64, u64, Vec<u
 #[test]
 fn test_mcap_to_mcapable_roundtrip_unchunked() {
     let schemas = vec![("TestSchema".to_string(), "raw".to_string(), b"{}".to_vec())];
-    let channels = vec![("/test".to_string(), "raw".to_string(), 0, HashMap::new())];
+    let channels = vec![(
+        "/test".to_string(),
+        "raw".to_string(),
+        0,
+        HashMap::default(),
+    )];
     let messages = vec![
         (0, 0, 1000, 1000, b"message1".to_vec()),
         (0, 1, 2000, 2000, b"message2".to_vec()),
@@ -301,7 +306,13 @@ fn test_mcapable_to_mcap_roundtrip_unchunked() {
         "raw".to_string(),
         Bytes::from(b"{}".as_slice()),
     )];
-    let channels = vec![(0, "/test".to_string(), "raw".to_string(), 1, HashMap::new())];
+    let channels = vec![(
+        0,
+        "/test".to_string(),
+        "raw".to_string(),
+        1,
+        HashMap::default(),
+    )];
     let messages = vec![
         (0, 0, 1000, 1000, Bytes::copy_from_slice(b"message1")),
         (0, 1, 2000, 2000, Bytes::copy_from_slice(b"message2")),
@@ -331,7 +342,12 @@ fn test_mcapable_to_mcap_roundtrip_unchunked() {
 #[test]
 fn test_mcap_to_mcapable_roundtrip_chunked() {
     let schemas = vec![("TestSchema".to_string(), "raw".to_string(), b"{}".to_vec())];
-    let channels = vec![("/test".to_string(), "raw".to_string(), 0, HashMap::new())];
+    let channels = vec![(
+        "/test".to_string(),
+        "raw".to_string(),
+        0,
+        HashMap::default(),
+    )];
     let messages = vec![
         (0, 0, 1000, 1000, b"message1".to_vec()),
         (0, 1, 2000, 2000, b"message2".to_vec()),
@@ -363,7 +379,13 @@ fn test_mcapable_to_mcap_roundtrip_chunked() {
         "raw".to_string(),
         Bytes::from(b"{}".as_slice()),
     )];
-    let channels = vec![(0, "/test".to_string(), "raw".to_string(), 1, HashMap::new())];
+    let channels = vec![(
+        0,
+        "/test".to_string(),
+        "raw".to_string(),
+        1,
+        HashMap::default(),
+    )];
     let messages = vec![
         (0, 0, 1000, 1000, Bytes::copy_from_slice(b"message1")),
         (0, 1, 2000, 2000, Bytes::copy_from_slice(b"message2")),
@@ -394,7 +416,12 @@ fn test_mcapable_to_mcap_roundtrip_chunked() {
 fn test_mcap_to_mcapable_roundtrip_with_compression() {
     for compression in [mcap::Compression::Lz4, mcap::Compression::Zstd] {
         let schemas = vec![("TestSchema".to_string(), "raw".to_string(), b"{}".to_vec())];
-        let channels = vec![("/test".to_string(), "raw".to_string(), 0, HashMap::new())];
+        let channels = vec![(
+            "/test".to_string(),
+            "raw".to_string(),
+            0,
+            HashMap::default(),
+        )];
         let messages = vec![
             (0, 0, 1000, 1000, b"message1".to_vec()),
             (0, 1, 2000, 2000, b"message2".to_vec()),
@@ -427,7 +454,13 @@ fn test_mcapable_to_mcap_roundtrip_with_compression() {
             "raw".to_string(),
             Bytes::from(b"{}".as_slice()),
         )];
-        let channels = vec![(0, "/test".to_string(), "raw".to_string(), 1, HashMap::new())];
+        let channels = vec![(
+            0,
+            "/test".to_string(),
+            "raw".to_string(),
+            1,
+            HashMap::default(),
+        )];
         let messages = vec![
             (0, 0, 1000, 1000, Bytes::copy_from_slice(b"message1")),
             (0, 1, 2000, 2000, Bytes::copy_from_slice(b"message2")),
@@ -465,13 +498,13 @@ fn test_mcap_to_mcapable_roundtrip_multiple_channels() {
             "/channel0".to_string(),
             "raw".to_string(),
             0,
-            HashMap::new(),
+            HashMap::default(),
         ), // schema_id 0 = first schema (index 0)
         (
             "/channel1".to_string(),
             "raw".to_string(),
             1,
-            HashMap::new(),
+            HashMap::default(),
         ), // schema_id 1 = second schema (index 1)
     ];
     let messages = vec![
@@ -514,7 +547,12 @@ fn test_mcap_to_mcapable_roundtrip_multiple_channels() {
 #[test]
 fn test_full_roundtrip_mcap_to_mcapable_to_mcap() {
     let schemas = vec![("TestSchema".to_string(), "raw".to_string(), b"{}".to_vec())];
-    let channels = vec![("/test".to_string(), "raw".to_string(), 0, HashMap::new())];
+    let channels = vec![(
+        "/test".to_string(),
+        "raw".to_string(),
+        0,
+        HashMap::default(),
+    )];
     let messages = vec![
         (0, 0, 1000, 1000, b"message1".to_vec()),
         (0, 1, 2000, 2000, b"message2".to_vec()),
@@ -563,7 +601,7 @@ fn test_full_roundtrip_mcap_to_mcapable_to_mcap() {
                 topic.clone(),
                 enc.clone(),
                 mapped_schema_id,
-                HashMap::new(),
+                HashMap::default(),
             )
         })
         .collect();
@@ -610,7 +648,13 @@ fn test_full_roundtrip_mcapable_to_mcap_to_mcapable() {
         "raw".to_string(),
         Bytes::from(b"{}".as_slice()),
     )];
-    let channels = vec![(0, "/test".to_string(), "raw".to_string(), 1, HashMap::new())];
+    let channels = vec![(
+        0,
+        "/test".to_string(),
+        "raw".to_string(),
+        1,
+        HashMap::default(),
+    )];
     let messages = vec![
         (0, 0, 1000, 1000, Bytes::copy_from_slice(b"message1")),
         (0, 1, 2000, 2000, Bytes::copy_from_slice(b"message2")),
@@ -644,7 +688,7 @@ fn test_full_roundtrip_mcapable_to_mcap_to_mcapable() {
     let mcap_channels: Vec<_> = channels
         .iter()
         .map(|(_, topic, enc, schema_id, _)| {
-            (topic.clone(), enc.clone(), *schema_id, HashMap::new())
+            (topic.clone(), enc.clone(), *schema_id, HashMap::default())
         })
         .collect();
     let mcap_messages: Vec<_> = mcap_messages_1
@@ -694,7 +738,7 @@ fn test_roundtrip_header_metadata() {
         Bytes::from(b"{}".as_slice()),
     )];
     let channels_mc = vec![(0, "/test".to_string(), "raw".to_string(), 1, {
-        let mut meta = HashMap::new();
+        let mut meta = HashMap::default();
         meta.insert("key1".into(), "value1".into());
         meta
     })];
@@ -741,7 +785,13 @@ fn test_roundtrip_large_message() {
         "raw".to_string(),
         Bytes::from(b"{}".as_slice()),
     )];
-    let channels = vec![(0, "/test".to_string(), "raw".to_string(), 1, HashMap::new())];
+    let channels = vec![(
+        0,
+        "/test".to_string(),
+        "raw".to_string(),
+        1,
+        HashMap::default(),
+    )];
     let messages = vec![(0, 0, 1000, 1000, Bytes::from(large_data.clone()))];
 
     // Write with mcapable
@@ -784,7 +834,13 @@ fn test_roundtrip_many_messages() {
         "raw".to_string(),
         Bytes::from(b"{}".as_slice()),
     )];
-    let channels = vec![(0, "/test".to_string(), "raw".to_string(), 1, HashMap::new())];
+    let channels = vec![(
+        0,
+        "/test".to_string(),
+        "raw".to_string(),
+        1,
+        HashMap::default(),
+    )];
 
     // Write with mcapable
     let mcapable_data = create_mcapable_file(
