@@ -162,5 +162,47 @@ fn bench_writes(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_writes);
+fn bench_reads(c: &mut Criterion) {
+    let (msgs, total_bytes) = build_messages();
+
+    // Pre-build one file per mode (outside the measured loop).
+    let files = [
+        (
+            Mode::AllCompressedZstd,
+            write_one(&msgs, Mode::AllCompressedZstd),
+        ),
+        (
+            Mode::MixedVideoUncompressed,
+            write_one(&msgs, Mode::MixedVideoUncompressed),
+        ),
+        (
+            Mode::AllUncompressed,
+            write_one(&msgs, Mode::AllUncompressed),
+        ),
+    ];
+
+    let mut group = c.benchmark_group("read_mixed_compression");
+    group.throughput(Throughput::Bytes(total_bytes));
+
+    for (mode, bytes) in &files {
+        group.bench_with_input(
+            BenchmarkId::from_parameter(mode.label()),
+            bytes.as_slice(),
+            |b, file_bytes| {
+                b.iter(|| {
+                    let mut reader = mcapable_core::reader::Reader::from_slice(file_bytes).unwrap();
+                    let mut total = 0usize;
+                    for raw in reader.raw_messages().unwrap() {
+                        let raw = raw.unwrap();
+                        total = total.wrapping_add(raw.data_len());
+                    }
+                    black_box(total);
+                });
+            },
+        );
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_writes, bench_reads);
 criterion_main!(benches);
