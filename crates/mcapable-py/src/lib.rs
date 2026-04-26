@@ -206,7 +206,7 @@ fn byte_str_to_string(value: &ByteStr) -> String {
 }
 
 fn metadata_to_vec(
-    metadata: &std::collections::HashMap<ByteStr, ByteStr>,
+    metadata: &mcapable_core::collections::HashMap<ByteStr, ByteStr>,
 ) -> Vec<(String, String)> {
     metadata
         .iter()

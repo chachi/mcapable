@@ -1,11 +1,11 @@
 use bytes::Bytes;
+use mcapable_core::collections::HashMap;
 use mcapable_core::reader::{Builder as ReaderBuilder, Reader as CoreReader};
 use mcapable_core::source::BytesCursor;
 use mcapable_core::zero_copy::ByteStr;
 use mcapable_core::{Chunk, Message, RawMessage, Record};
 use serde_json::Value as JsonValue;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::ptr;
