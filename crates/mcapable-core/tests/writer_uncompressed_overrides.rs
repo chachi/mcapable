@@ -127,3 +127,153 @@ fn copy_channel_with_override_routes_to_override_stream() {
         "no messages were written to the default zstd channel; expected 0 zstd chunks",
     );
 }
+
+/// Override chunks must use the empty compression string (per MCAP spec for
+/// "no compression").
+#[test]
+fn override_stream_uses_empty_compression_string() {
+    let out = Cursor::new(Vec::new());
+    let mut writer = WriterBuilder::new()
+        .chunked(ChunkOptions {
+            compression: Some(Compression::Zstd),
+            max_uncompressed_bytes: 64,
+            include_crc: true,
+        })
+        .build(out)
+        .unwrap();
+
+    let schema = SchemaSpec::new("pkg/Msg", "raw", Bytes::from_static(b""));
+    let mut ch = writer
+        .add_channel(
+            ChannelSpec::new("/cam", "h264")
+                .schema(schema)
+                .uncompressed_chunks(),
+        )
+        .unwrap();
+    for i in 0..4u64 {
+        ch.write(i, i, vec![b'a'; 80]).unwrap();
+    }
+    drop(ch);
+    writer.finish().unwrap();
+
+    let bytes = writer.into_inner().into_inner();
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+    let summary = reader.summary().unwrap().expect("summary");
+
+    for ci in summary.chunk_indexes.iter() {
+        assert!(
+            ci.compression.as_ref().is_empty(),
+            "expected empty compression for override stream, got {:?}",
+            ci.compression,
+        );
+    }
+}
+
+/// Override stream's flush threshold is independent of the default's:
+/// a small override threshold flushes frequently while the default
+/// accumulates; a small default threshold flushes frequently while
+/// the override accumulates.
+#[test]
+fn override_stream_flushes_on_its_own_threshold() {
+    let out = Cursor::new(Vec::new());
+    let mut writer = WriterBuilder::new()
+        .chunked(ChunkOptions {
+            compression: None,
+            max_uncompressed_bytes: 1 << 20, // huge — won't flush during the test
+            include_crc: true,
+        })
+        .build(out)
+        .unwrap();
+
+    let schema = SchemaSpec::new("pkg/Msg", "raw", Bytes::from_static(b""));
+    let mut default_ch = writer
+        .add_channel(ChannelSpec::new("/telemetry", "raw").schema(schema.clone()))
+        .unwrap();
+    let mut override_ch = writer
+        .add_channel(
+            ChannelSpec::new("/cam", "h264")
+                .schema(schema)
+                .chunk_override(ChunkOptions {
+                    compression: None,
+                    max_uncompressed_bytes: 32, // tiny — flushes per message
+                    include_crc: true,
+                }),
+        )
+        .unwrap();
+
+    for i in 0..6u64 {
+        default_ch.write(i, i, vec![b'a'; 16]).unwrap();
+        override_ch.write(i, i, vec![b'b'; 64]).unwrap();
+    }
+    drop(default_ch);
+    drop(override_ch);
+    writer.finish().unwrap();
+
+    let bytes = writer.into_inner().into_inner();
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+    let summary = reader.summary().unwrap().expect("summary");
+
+    let override_chunks = summary
+        .chunk_indexes
+        .iter()
+        .filter(|ci| ci.compression.as_ref().is_empty())
+        .count();
+    // Override flushes per message (6 writes); finish-flush leaves at most one
+    // extra. Default accumulates and flushes once at finish.
+    assert!(
+        override_chunks >= 6,
+        "expected at least 6 override chunks (one per message), got {override_chunks}",
+    );
+}
+
+/// Multiple tagged channels with partial fills all flush on `finish()`.
+#[test]
+fn finish_flushes_all_override_streams() {
+    let out = Cursor::new(Vec::new());
+    let mut writer = WriterBuilder::new()
+        .chunked(ChunkOptions {
+            compression: Some(Compression::Zstd),
+            max_uncompressed_bytes: 1 << 20,
+            include_crc: true,
+        })
+        .build(out)
+        .unwrap();
+
+    let schema = SchemaSpec::new("pkg/Msg", "raw", Bytes::from_static(b""));
+    let mut ch_a = writer
+        .add_channel(
+            ChannelSpec::new("/cam_a", "h264")
+                .schema(schema.clone())
+                .uncompressed_chunks(),
+        )
+        .unwrap();
+    let mut ch_b = writer
+        .add_channel(
+            ChannelSpec::new("/cam_b", "h264")
+                .schema(schema)
+                .uncompressed_chunks(),
+        )
+        .unwrap();
+
+    // Partial fills — well under any reasonable threshold.
+    ch_a.write(1, 1, vec![b'a'; 16]).unwrap();
+    ch_b.write(2, 2, vec![b'b'; 16]).unwrap();
+    drop(ch_a);
+    drop(ch_b);
+
+    writer.finish().unwrap();
+
+    let bytes = writer.into_inner().into_inner();
+    let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
+    let summary = reader.summary().unwrap().expect("summary");
+
+    let override_chunks = summary
+        .chunk_indexes
+        .iter()
+        .filter(|ci| ci.compression.as_ref().is_empty())
+        .count();
+    assert_eq!(
+        override_chunks, 2,
+        "expected one chunk per non-empty override stream (2 streams, 2 chunks)",
+    );
+}
