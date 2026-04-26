@@ -229,7 +229,7 @@ mod multi_channel {
     fn test_message_channel_ids() {
         let mcap_data = create_multi_channel_mcap(3, 5);
         let mut reader = mcapable::Reader::from_slice(&mcap_data).unwrap();
-        let mut channel_counts: HashMap<u16, usize> = HashMap::new();
+        let mut channel_counts: HashMap<u16, usize> = HashMap::default();
         for msg in reader.raw_messages().unwrap() {
             let msg = msg.unwrap();
             *channel_counts.entry(msg.channel_id).or_insert(0) += 1;

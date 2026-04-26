@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Second pass: count messages per channel
     println!("\nMessage counts per channel:");
     let mut channel_counts: mcapable_core::collections::HashMap<u16, usize> =
-        mcapable_core::collections::HashMap::new();
+        mcapable_core::collections::HashMap::default();
     for message in reader.messages()? {
         let msg = message?;
         *channel_counts.entry(msg.channel_id).or_default() += 1;

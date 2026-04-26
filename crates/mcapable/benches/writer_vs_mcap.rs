@@ -150,7 +150,7 @@ fn bench_writer_to_mem(c: &mut Criterion) {
                     topic: format!("/channel/{ch}").as_str().into(),
                     message_encoding: "application/octet-stream".into(),
                     schema_id: 0,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::default(),
                 })
                 .collect(),
             builder: if spec.chunked {
@@ -441,7 +441,7 @@ fn bench_writer_disk_roundtrip(c: &mut Criterion) {
                     topic: format!("/channel/{ch}").as_str().into(),
                     message_encoding: "application/octet-stream".into(),
                     schema_id: 0,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::default(),
                 })
                 .collect(),
             builder: if spec.chunked {
@@ -715,7 +715,7 @@ fn bench_writer_disk_write_only(c: &mut Criterion) {
                     topic: format!("/channel/{ch}").as_str().into(),
                     message_encoding: "application/octet-stream".into(),
                     schema_id: 0,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::default(),
                 })
                 .collect(),
             builder: if spec.chunked {

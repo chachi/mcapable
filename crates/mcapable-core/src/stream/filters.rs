@@ -52,7 +52,7 @@ pub(super) fn chunk_might_have_messages_in_range_via_index(
         return true;
     }
 
-    let mut cache: HashMap<u64, Option<crate::types::MessageIndex>> = HashMap::new();
+    let mut cache: HashMap<u64, Option<crate::types::MessageIndex>> = HashMap::default();
 
     for (channel_id, message_index_offset) in &index.message_index_offsets {
         if let Some(predicate) = channel_predicate

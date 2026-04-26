@@ -48,7 +48,7 @@ fn writer_round_trip_unchunked() {
         topic: ByteStr::from("/test"),
         message_encoding: ByteStr::from("json"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut channel_writer = writer.copy_channel(&channel).unwrap();
     channel_writer
@@ -118,7 +118,7 @@ fn write_basic_file(chunk_options: Option<ChunkOptions>) -> Vec<u8> {
         topic: ByteStr::from("/test"),
         message_encoding: ByteStr::from("json"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut channel_writer = writer.copy_channel(&channel).unwrap();
     channel_writer
@@ -359,7 +359,7 @@ fn writer_copy_record_round_trip() {
             topic: ByteStr::from("/test"),
             message_encoding: ByteStr::from("json"),
             schema_id: 1,
-            metadata: HashMap::new(),
+            metadata: HashMap::default(),
         };
         let mut cw = writer.copy_channel(&channel).unwrap();
         cw.write(100, 200, Bytes::from_static(b"hello")).unwrap();
@@ -378,7 +378,7 @@ fn writer_copy_record_round_trip() {
         let md = mcapable_core::types::Metadata {
             name: ByteStr::from("build"),
             metadata: {
-                let mut m = HashMap::new();
+                let mut m = HashMap::default();
                 m.insert(ByteStr::from("version"), ByteStr::from("1.0"));
                 m
             },
@@ -440,7 +440,7 @@ fn writer_copy_metadata_round_trip() {
     let md = mcapable_core::types::Metadata {
         name: ByteStr::from("config"),
         metadata: {
-            let mut m = HashMap::new();
+            let mut m = HashMap::default();
             m.insert(ByteStr::from("key1"), ByteStr::from("val1"));
             m.insert(ByteStr::from("key2"), ByteStr::from("val2"));
             m
@@ -519,7 +519,7 @@ fn writer_copy_chunk_record_preserves_data() {
             topic: ByteStr::from("/test"),
             message_encoding: ByteStr::from("json"),
             schema_id: 1,
-            metadata: HashMap::new(),
+            metadata: HashMap::default(),
         };
         let mut cw = writer.copy_channel(&channel).unwrap();
         cw.write(100, 200, Bytes::from_static(b"hello")).unwrap();
@@ -580,7 +580,7 @@ fn writer_copy_message_record_unchunked() {
             topic: ByteStr::from("/test"),
             message_encoding: ByteStr::from("json"),
             schema_id: 1,
-            metadata: HashMap::new(),
+            metadata: HashMap::default(),
         };
         let mut cw = writer.copy_channel(&channel).unwrap();
         cw.write_with_sequence(100, 200, Bytes::from_static(b"data1"), 42)

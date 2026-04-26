@@ -51,7 +51,7 @@ pub fn run_with_output<W: Write>(opts: CatOptions, out: &mut W) -> Result<(), St
 
     // Build per-schema parsers for JSON mode
     let schema_parsers: HashMap<u16, mcapable_core::stream::schema_parser::SchemaParser> = if json {
-        let mut parsers = HashMap::new();
+        let mut parsers = HashMap::default();
         for (id, schema) in schemas.iter() {
             match mcapable_core::stream::schema_parser::SchemaParser::from_schema(schema) {
                 Ok(parser) => {
@@ -64,7 +64,7 @@ pub fn run_with_output<W: Write>(opts: CatOptions, out: &mut W) -> Result<(), St
         }
         parsers
     } else {
-        HashMap::new()
+        HashMap::default()
     };
 
     let mut stream = reader.messages().cli()?;

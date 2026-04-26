@@ -71,7 +71,7 @@ fn parse_ros1_definitions(
     schema_text: &str,
     root_name: &str,
 ) -> Result<HashMap<String, RosMessage>> {
-    let mut messages = HashMap::new();
+    let mut messages = HashMap::default();
     let root_pkg = root_name.split('/').next().unwrap_or(root_name);
 
     for block in schema_text.split(

@@ -34,7 +34,7 @@ impl WriterBuilder {
             header: Header {
                 profile: ByteStr::from(""),
                 library: default_library_string(),
-                metadata: HashMap::new(),
+                metadata: HashMap::default(),
             },
             validation: Validation::Strict,
             chunk_options: None,
@@ -105,13 +105,13 @@ impl WriterBuilder {
             always_write_summary: self.always_write_summary,
             chunk_state: self.chunk_options.map(ChunkState::new),
             override_streams: Vec::new(),
-            schemas: HashMap::new(),
-            channels: HashMap::new(),
+            schemas: HashMap::default(),
+            channels: HashMap::default(),
             channel_stats: Vec::new(),
             chunk_indexes: Vec::new(),
             attachment_indexes: Vec::new(),
             metadata_indexes: Vec::new(),
-            schema_ids_by_key: HashMap::new(),
+            schema_ids_by_key: HashMap::default(),
         })
     }
 }

@@ -20,7 +20,7 @@ impl<'a, T> DefaultParsers<'a, T> {
         Self {
             json_mapper: Box::new(json_mapper),
             bytes_mapper: Box::new(bytes_mapper),
-            schema_parsers: HashMap::new(),
+            schema_parsers: HashMap::default(),
         }
     }
 

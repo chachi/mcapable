@@ -139,7 +139,7 @@ mod tests {
         push_len_prefixed_str(&mut payload, &profile).unwrap();
         push_len_prefixed_str(&mut payload, &library).unwrap();
 
-        let mut metadata = HashMap::new();
+        let mut metadata = HashMap::default();
         metadata.insert(ByteStr::from("key1"), ByteStr::from("value1"));
         metadata.insert(ByteStr::from("key2"), ByteStr::from("value2"));
         push_metadata_map(&mut payload, &metadata).unwrap();

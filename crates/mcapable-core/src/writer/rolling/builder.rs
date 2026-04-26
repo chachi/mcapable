@@ -93,7 +93,7 @@ impl<F: SinkFactory + 'static, T: SplitTrigger + 'static> RollingWriterBuilder<F
             on_split: self.on_split,
             registered_schemas: Vec::new(),
             registered_channels: Vec::new(),
-            registered_overrides: HashMap::new(),
+            registered_overrides: HashMap::default(),
             file_index: 0,
             file_message_count: 0,
             file_opened_at: Instant::now(),

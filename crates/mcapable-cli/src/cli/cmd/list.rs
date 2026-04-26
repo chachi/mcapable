@@ -25,7 +25,7 @@ pub fn run_with_output<W: Write>(command: ListCommand, stdout: &mut W) -> Result
                 .map(|summary| summary.schemas.clone())
                 .unwrap_or_default();
             let schemas = if summary_schemas.is_empty() {
-                let mut out = HashMap::new();
+                let mut out = HashMap::default();
                 for schema in reader.data_section_schemas().cli()? {
                     out.insert(schema.id, schema);
                 }
@@ -44,7 +44,7 @@ pub fn run_with_output<W: Write>(command: ListCommand, stdout: &mut W) -> Result
                 .map(|summary| summary.channels.clone())
                 .unwrap_or_default();
             let channels = if summary_channels.is_empty() {
-                let mut out = HashMap::new();
+                let mut out = HashMap::default();
                 for channel in reader.data_section_channels().cli()? {
                     out.insert(channel.id, channel);
                 }
@@ -339,7 +339,7 @@ mod tests {
 
     #[test]
     fn schema_table_splits_multiline_data() {
-        let mut schemas = HashMap::new();
+        let mut schemas = HashMap::default();
         schemas.insert(
             1,
             mcapable_core::Schema {
@@ -378,8 +378,8 @@ mod tests {
 
     #[test]
     fn channel_table_includes_metadata() {
-        let mut channels = HashMap::new();
-        let mut metadata = HashMap::new();
+        let mut channels = HashMap::default();
+        let mut metadata = HashMap::default();
         metadata.insert("k\"".into(), "v\\".into());
         channels.insert(
             1,

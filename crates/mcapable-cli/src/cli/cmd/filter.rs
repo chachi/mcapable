@@ -143,7 +143,8 @@ pub fn run(opts: FilterOptions) -> Result<(), String> {
 
             if !matching_channel_ids.is_empty() {
                 // Track the latest pre-start message per channel
-                let mut last_before_start: HashMap<u16, mcapable_core::RawMessage> = HashMap::new();
+                let mut last_before_start: HashMap<u16, mcapable_core::RawMessage> =
+                    HashMap::default();
                 for msg in reader.raw_messages().cli()? {
                     let msg = msg.cli()?;
                     if msg.log_time >= start {

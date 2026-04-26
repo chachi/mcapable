@@ -41,7 +41,7 @@ fn write_mcap_with_messages(dir: &TempDir, name: &str, times: &[u64]) -> String 
         topic: ByteStr::from("/test"),
         message_encoding: ByteStr::from("json"),
         schema_id: 1,
-        metadata: HashMap::new(),
+        metadata: HashMap::default(),
     };
     let mut cw = writer.copy_channel(&channel).unwrap();
     for &t in times {
