@@ -169,6 +169,8 @@ impl ChannelSpec {
     /// Convenience: route this channel into a dedicated chunk stream with
     /// `compression: None`. Other `ChunkOptions` fields take their defaults.
     pub fn uncompressed_chunks(mut self) -> Self {
+        // `compression: None` is explicit — guards intent against any future
+        // change to `ChunkOptions::default()`'s compression default.
         self.chunk_override = Some(ChunkOptions {
             compression: None,
             ..ChunkOptions::default()
@@ -472,5 +474,23 @@ mod tests {
         };
         let b = a.clone();
         assert_eq!(a, b);
+
+        // Confirm PartialEq actually discriminates field changes — guards
+        // against a hypothetical hand-rolled impl that ignored a field.
+        let differs_compression = ChunkOptions {
+            compression: None,
+            ..a.clone()
+        };
+        let differs_size = ChunkOptions {
+            max_uncompressed_bytes: 0,
+            ..a.clone()
+        };
+        let differs_crc = ChunkOptions {
+            include_crc: false,
+            ..a.clone()
+        };
+        assert_ne!(a, differs_compression);
+        assert_ne!(a, differs_size);
+        assert_ne!(a, differs_crc);
     }
 }
