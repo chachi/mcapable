@@ -238,6 +238,60 @@ fn override_stream_flushes_on_its_own_threshold() {
         default_chunks, 1,
         "default stream should flush exactly once at finish, got {default_chunks}",
     );
+
+    // The default's only chunk should be the LAST entry in chunk_indexes — it
+    // landed at finish() while overrides flushed eagerly per-message during
+    // the write loop. This distinguishes "override flushed eagerly" from
+    // "override flushed late in finish".
+    let last = summary
+        .chunk_indexes
+        .iter()
+        .last()
+        .expect("at least one chunk");
+    assert_eq!(
+        last.compression.as_ref(),
+        "zstd",
+        "the last chunk should be the default zstd one (flushed at finish)",
+    );
+}
+
+/// Default chunk path remains byte-equivalent regardless of whether the
+/// caller knows about chunk_override. Guards against future refactors
+/// that accidentally regress the "zero overhead when not used" promise.
+#[test]
+fn default_path_unchanged_when_no_overrides() {
+    fn write_one(extra_no_op_override: bool) -> Vec<u8> {
+        let out = Cursor::new(Vec::new());
+        let mut writer = WriterBuilder::new()
+            .chunked(ChunkOptions {
+                compression: Some(Compression::Zstd),
+                max_uncompressed_bytes: 64,
+                include_crc: true,
+            })
+            .build(out)
+            .unwrap();
+
+        let schema = SchemaSpec::new("pkg/Msg", "raw", Bytes::from_static(b""));
+        let mut spec = ChannelSpec::new("/x", "raw").schema(schema);
+        if extra_no_op_override {
+            // Explicitly setting chunk_override to None should be a no-op.
+            spec.chunk_override = None;
+        }
+        let mut ch = writer.add_channel(spec).unwrap();
+        for i in 0..4u64 {
+            ch.write(i, i, vec![b'a'; 80]).unwrap();
+        }
+        drop(ch);
+        writer.finish().unwrap();
+        writer.into_inner().into_inner()
+    }
+
+    let baseline = write_one(false);
+    let with_explicit_none = write_one(true);
+    assert_eq!(
+        baseline, with_explicit_none,
+        "explicitly setting chunk_override to None must produce a byte-identical file",
+    );
 }
 
 /// Multiple tagged channels with partial fills all flush on `finish()`.

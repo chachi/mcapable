@@ -190,17 +190,25 @@ proptest! {
         let a_id = ch_a.channel_id();
         let b_id = ch_b.channel_id();
 
-        let mut expected: Vec<(u16, Vec<u8>)> = Vec::new();
+        let mut expected: Vec<(u16, u32, Vec<u8>)> = Vec::new();
         let mut t = 1000u64;
+        use std::collections::HashMap;
+        let mut next_seq: HashMap<u16, u32> = HashMap::new();
         for (tag, data) in &msgs {
             t += 1;
-            let (ch_id, write_res) = match tag {
-                0 => (default_id, ch_default.write(t, t, data.clone())),
-                1 => (a_id, ch_a.write(t, t, data.clone())),
-                _ => (b_id, ch_b.write(t, t, data.clone())),
+            let ch_id = match tag {
+                0 => default_id,
+                1 => a_id,
+                _ => b_id,
+            };
+            let seq = *next_seq.entry(ch_id).and_modify(|s| *s += 1).or_insert(0);
+            let write_res = match tag {
+                0 => ch_default.write_with_sequence(t, t, data.clone(), seq),
+                1 => ch_a.write_with_sequence(t, t, data.clone(), seq),
+                _ => ch_b.write_with_sequence(t, t, data.clone(), seq),
             };
             write_res.unwrap();
-            expected.push((ch_id, data.clone()));
+            expected.push((ch_id, seq, data.clone()));
         }
         drop(ch_default);
         drop(ch_a);
@@ -210,20 +218,19 @@ proptest! {
         let bytes = writer.into_inner().into_inner();
 
         let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
-        let mut got: Vec<(u16, Vec<u8>)> = Vec::new();
+        let mut got: Vec<(u16, u32, Vec<u8>)> = Vec::new();
         for raw in reader.raw_messages().unwrap() {
             let raw = raw.unwrap();
-            got.push((raw.channel_id, raw.data_bytes().to_vec()));
+            got.push((raw.channel_id, raw.sequence, raw.data_bytes().to_vec()));
         }
 
         // Group expected by channel; group got by channel; assert per-channel
         // sequences match (order within a channel must be preserved; relative
         // order between channels follows log_time, which is monotonic above).
-        use std::collections::HashMap;
-        let group = |v: &Vec<(u16, Vec<u8>)>| -> HashMap<u16, Vec<Vec<u8>>> {
-            let mut m: HashMap<u16, Vec<Vec<u8>>> = HashMap::new();
-            for (id, data) in v {
-                m.entry(*id).or_default().push(data.clone());
+        let group = |v: &Vec<(u16, u32, Vec<u8>)>| -> HashMap<u16, Vec<(u32, Vec<u8>)>> {
+            let mut m: HashMap<u16, Vec<(u32, Vec<u8>)>> = HashMap::new();
+            for (id, seq, data) in v {
+                m.entry(*id).or_default().push((*seq, data.clone()));
             }
             m
         };

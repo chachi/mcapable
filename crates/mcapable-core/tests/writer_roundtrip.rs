@@ -719,6 +719,12 @@ fn writer_round_trip_mixed_compression_lz4_default_uncompressed_override() {
 }
 
 #[test]
+fn writer_round_trip_mixed_compression_none_default_uncompressed_override() {
+    let (bytes, default_msgs, override_msgs) = write_mixed_compression_file(None, None);
+    assert_mixed_round_trip_messages(bytes, default_msgs, override_msgs);
+}
+
+#[test]
 fn reader_chunk_stream_sees_both_compressions_in_mixed_file() {
     let (bytes, _, _) = write_mixed_compression_file(Some(Compression::Zstd), None);
 
@@ -744,8 +750,11 @@ fn summary_chunk_indexes_round_trip_for_mixed_file() {
     let mut reader = mcapable_core::reader::Reader::from_slice(&bytes).unwrap();
     let summary = reader.summary().unwrap().expect("summary");
 
+    // Snapshot index entries before reborrowing reader for chunks().
+    let indexes: Vec<_> = summary.chunk_indexes.iter().cloned().collect();
+
     // Every chunk index entry's offset+length must lie within the file.
-    for ci in summary.chunk_indexes.iter() {
+    for ci in &indexes {
         let end = ci.chunk_start_offset + ci.chunk_length;
         assert!(
             end as usize <= bytes.len(),
@@ -757,8 +766,7 @@ fn summary_chunk_indexes_round_trip_for_mixed_file() {
     }
 
     // At least one zstd and one empty-compression entry must appear.
-    let mut compressions: Vec<String> = summary
-        .chunk_indexes
+    let mut compressions: Vec<String> = indexes
         .iter()
         .map(|ci| ci.compression.as_ref().to_string())
         .collect();
@@ -766,4 +774,30 @@ fn summary_chunk_indexes_round_trip_for_mixed_file() {
     compressions.dedup();
     assert!(compressions.contains(&"zstd".to_string()));
     assert!(compressions.contains(&"".to_string()));
+
+    // Cross-check each chunk record against its index entry.
+    let actual_chunks: Vec<_> = reader.chunks().map(|r| r.unwrap()).collect();
+    assert_eq!(
+        actual_chunks.len(),
+        indexes.len(),
+        "summary chunk_indexes count must match actual chunks",
+    );
+    // Build (compression, uncompressed_size) -> count multisets and compare.
+    use std::collections::BTreeMap;
+    let mut idx_buckets: BTreeMap<(String, u64), usize> = BTreeMap::new();
+    for ci in &indexes {
+        *idx_buckets
+            .entry((ci.compression.as_ref().to_string(), ci.uncompressed_size))
+            .or_insert(0) += 1;
+    }
+    let mut chunk_buckets: BTreeMap<(String, u64), usize> = BTreeMap::new();
+    for ch in &actual_chunks {
+        *chunk_buckets
+            .entry((ch.compression.as_ref().to_string(), ch.uncompressed_size))
+            .or_insert(0) += 1;
+    }
+    assert_eq!(
+        idx_buckets, chunk_buckets,
+        "summary chunk indexes must match actual chunks by (compression, uncompressed_size)",
+    );
 }

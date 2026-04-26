@@ -842,6 +842,7 @@ impl<W: Write + Seek> WriterImpl<W> {
                 message.publish_time,
                 message.data_bytes(),
             );
+            // Keep override streams interleaved with default flushes; cheap when none registered (zero-iter loop).
             self.flush_overrides_if_needed_all(false)?;
             self.flush_chunk_if_needed(false)?;
             return Ok(());
