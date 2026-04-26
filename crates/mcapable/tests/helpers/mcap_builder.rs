@@ -4,7 +4,8 @@
 //! This is a thin wrapper around mcap::Writer that provides a builder-style API
 //! for creating test MCAP files with specific characteristics.
 
-use std::collections::{BTreeMap, HashMap};
+use mcapable_core::collections::HashMap;
+use std::collections::BTreeMap;
 use std::io::Cursor;
 
 /// Compression type for test MCAP files.

@@ -210,7 +210,7 @@ mod chunk_parsing {
 
 mod multi_channel {
     use super::*;
-    use std::collections::HashMap;
+    use mcapable_core::collections::HashMap;
 
     #[test]
     fn test_multi_channel_parsing() {

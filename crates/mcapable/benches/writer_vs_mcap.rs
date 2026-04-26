@@ -6,8 +6,9 @@ use bytes::Bytes;
 use criterion::{
     BatchSize, BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
 };
+use mcapable_core::collections::HashMap;
 use memmap::Mmap;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::io::{BufWriter, Cursor, Seek, SeekFrom, Write};
 use tempfile::tempfile_in;
 

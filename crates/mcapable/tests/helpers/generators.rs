@@ -6,8 +6,8 @@
 
 use bytes::Bytes;
 use mcapable::*;
+use mcapable_core::collections::HashMap;
 use proptest::prelude::*;
-use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 /// Generate valid MCAP magic bytes.

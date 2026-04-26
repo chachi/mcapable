@@ -4,8 +4,8 @@
 //! and that all metadata (headers, footers, channels, schemas, messages) is preserved.
 
 use bytes::Bytes;
+use mcapable_core::collections::HashMap;
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
