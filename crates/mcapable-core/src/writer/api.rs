@@ -185,6 +185,11 @@ pub struct ChannelWriter<W: Write + Seek> {
     pub(crate) inner: Rc<RefCell<WriterImpl<W>>>,
     pub(crate) channel_id: u16,
     pub(crate) next_sequence: u32,
+    /// True iff this channel has a `chunk_override` registered in
+    /// `WriterImpl::override_streams`. Cached so the per-message
+    /// write path can dispatch with one bool branch and never hash.
+    #[allow(dead_code)] // Routing wiring lands in Task 4; field is scaffolding only.
+    pub(crate) has_chunk_override: bool,
 }
 
 impl<W: Write + Seek> ChannelWriter<W> {
@@ -293,6 +298,7 @@ impl<W: Write + Seek> Writer<W> {
             inner: Rc::clone(&self.inner),
             channel_id,
             next_sequence: 0,
+            has_chunk_override: false,
         })
     }
 
@@ -321,6 +327,7 @@ impl<W: Write + Seek> Writer<W> {
             inner: Rc::clone(&self.inner),
             channel_id: channel.id,
             next_sequence: 0,
+            has_chunk_override: false,
         })
     }
 
