@@ -71,7 +71,7 @@ impl Default for Validation {
 }
 
 /// Configuration for chunked message writing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChunkOptions {
     /// Compression algorithm to apply to chunk record bodies.
     pub compression: Option<Compression>,
@@ -127,6 +127,11 @@ pub struct ChannelSpec {
     pub schema: Option<SchemaSpec>,
     /// Channel metadata map.
     pub metadata: HashMap<ByteStr, ByteStr>,
+    /// When `Some`, messages on this channel land in their own dedicated
+    /// chunk stream configured by these options. When `None`, messages flow
+    /// into the writer's default chunk stream (or top-level if the writer
+    /// was built without `.chunked(...)`).
+    pub chunk_override: Option<ChunkOptions>,
 }
 
 impl ChannelSpec {
@@ -137,6 +142,7 @@ impl ChannelSpec {
             message_encoding: message_encoding.into(),
             schema: None,
             metadata: HashMap::new(),
+            chunk_override: None,
         }
     }
 
@@ -149,6 +155,24 @@ impl ChannelSpec {
     /// Set the channel metadata map.
     pub fn metadata(mut self, metadata: HashMap<ByteStr, ByteStr>) -> Self {
         self.metadata = metadata;
+        self
+    }
+
+    /// Route this channel's messages into a dedicated chunk stream configured
+    /// by `options`. Useful for writing already-compressed payloads as
+    /// uncompressed chunks while the rest of the file uses compression.
+    pub fn chunk_override(mut self, options: ChunkOptions) -> Self {
+        self.chunk_override = Some(options);
+        self
+    }
+
+    /// Convenience: route this channel into a dedicated chunk stream with
+    /// `compression: None`. Other `ChunkOptions` fields take their defaults.
+    pub fn uncompressed_chunks(mut self) -> Self {
+        self.chunk_override = Some(ChunkOptions {
+            compression: None,
+            ..ChunkOptions::default()
+        });
         self
     }
 }
@@ -407,5 +431,46 @@ impl<W: Write + Seek> Writer<W> {
     /// Finalize the file (DataEnd, Footer, trailing magic bytes).
     pub fn finish(&mut self) -> Result<()> {
         self.inner.borrow_mut().finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::compression::Compression;
+
+    #[test]
+    fn channel_spec_carries_chunk_override() {
+        let opts = ChunkOptions {
+            compression: None,
+            max_uncompressed_bytes: 1024,
+            include_crc: false,
+        };
+        let spec = ChannelSpec::new("/cam", "h264").chunk_override(opts.clone());
+        assert_eq!(spec.chunk_override, Some(opts));
+    }
+
+    #[test]
+    fn channel_spec_uncompressed_chunks_helper_sets_compression_none() {
+        let spec = ChannelSpec::new("/cam", "h264").uncompressed_chunks();
+        let chunk = spec.chunk_override.expect("override set");
+        assert!(chunk.compression.is_none());
+    }
+
+    #[test]
+    fn channel_spec_default_has_no_override() {
+        let spec = ChannelSpec::new("/cam", "h264");
+        assert!(spec.chunk_override.is_none());
+    }
+
+    #[test]
+    fn chunk_options_eq() {
+        let a = ChunkOptions {
+            compression: Some(Compression::Zstd),
+            max_uncompressed_bytes: 4096,
+            include_crc: true,
+        };
+        let b = a.clone();
+        assert_eq!(a, b);
     }
 }
