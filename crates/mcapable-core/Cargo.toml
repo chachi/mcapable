@@ -15,6 +15,7 @@ std = [
   "dep:polymock",
   "strum/std",
   "thiserror/std",
+  "rapidhash/std",
 ]
 alloc = [
   "nom/alloc",
@@ -52,6 +53,7 @@ arcstr = { version = "1.2", default-features = false, features = ["substr"] }
 bytes = { version = "1.11", default-features = false }
 polymock = { version = "0.2.2", default-features = false, optional = true, features = ["std"] }
 hashbrown = { version = "0.14", default-features = false, features = ["alloc"] }
+rapidhash = { version = "4.4", default-features = false }
 byteorder = { version = "1.5", optional = true }
 cdr-encoding = { version = "0.10.2", optional = true }
 serde = { version = "1.0", optional = true }
